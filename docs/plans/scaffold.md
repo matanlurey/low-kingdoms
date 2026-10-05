@@ -65,7 +65,9 @@ claimed. Version-specific upstream references are in [the source map](../referen
 - [x] CI has Linux/macOS/Windows build/tests plus separate quality, WASM, browser, and native-render jobs.
 - [x] Documentation paths, three local skill metadata records, and command names pass checks.
 - [x] Final implementation diff independently reviewed for scope, lifecycle, errors, and unused code.
-- [ ] Updated branch CI: push authorization granted; corrected revision results remain pending.
+- [x] Updated branch CI: all seven required build, test, quality, WASM, and renderer jobs passed.
+- [x] GitHub Pages publishes production on `main` after every required gate succeeds.
+- [x] Published WASM passes all four production browser cases; all sixteen captures inspected.
 
 ## Checks actually run
 
@@ -82,6 +84,9 @@ claimed. Version-specific upstream references are in [the source map](../referen
 | `cargo xtask smoke-web --timeout 900`                                | Chromium 153, Linux software WebGL2             | Passed: all 12 cases in 465.6 seconds, 0 skipped/flaky/unexpected, all browser-error records empty. `evidence/web/report.json` and `playwright.log`.                                                                                            |
 | Production without hooks                                             | Same browser, all four viewports                | Passed: rendered title, no bridge, successful resources, correct CSS/backing dimensions, no overflow. Included in the 12-case result.                                                                                                           |
 | Screenshot review                                                    | Native plus actual root/subpath/production WASM | Passed: title, About, focus/hover, portrait, landscape DPR 2, resize and DPR-change captures. [Reviewed reference gallery](../references/rendered/README.md).                                                                                   |
+| GitHub Actions native build/tests                                    | Ubuntu 24.04, macOS 15, Windows 2025            | Passed on all three runners for `50ad687`. [Run 37263916188](https://github.com/matanlurey/low-kingdoms/actions/runs/37263916188).                                                                                                              |
+| GitHub Actions quality, WASM, and native renderer                    | Ubuntu 24.04, Xvfb/software Vulkan              | Passed all three maintained gates for `50ad687`; native capture retained in `native-render-evidence`. Same CI run.                                                                                                                              |
+| GitHub Actions browser                                               | Chromium 153, Linux SwiftShader WebGL2          | Passed all 12 root/subpath/production cases in 721.5 seconds, zero skipped/flaky/unexpected, and 12 empty browser-error records. `browser-evidence/report.json` and `results/` in the same CI run.                                              |
 | macOS/Windows interactive execution; physical phones; Firefox/WebKit | Not available/configured                        | Not run. Compilation and Chromium emulation do not establish these runtime environments.                                                                                                                                                        |
 | Native minimize/restore                                              | Xvfb without a window manager                   | Not run; requires an interactive desktop/window manager.                                                                                                                                                                                        |
 
@@ -102,7 +107,7 @@ pixels and DPR 2, the actual canvas backing buffer is 1688×780; after a live DP
 canvas and real touch input remain correct. Captures use CSS-pixel dimensions. This is functional
 software-rendering evidence, not phone, Steam Deck, or hardware-performance certification.
 
-| Current static output   | WASM bytes | Main JS module bytes | Whole distribution bytes |
+| Local static output     | WASM bytes | Main JS module bytes | Whole distribution bytes |
 | ----------------------- | ---------: | -------------------: | -----------------------: |
 | Production `dist/web`   | 61,150,627 |              102,137 |               61,262,730 |
 | Support `dist/web-test` | 61,199,983 |              102,374 |               61,312,742 |
@@ -144,13 +149,18 @@ That initial revision's tests failed on the obsolete lifecycle assertion. Its qu
 tests after passing formatting/structure/host lints; WASM lint failed on the now-fixed framework
 parameter warning; native rendering failed before GPU initialization on the missing XKB runtime;
 browser rendering passed six desktop cases before its old 300-second deadline. It is **not a
-passing CI run**. The corrected revision's CI results must be recorded separately.
+passing CI run**. The corrected scaffold revision
+[`543da4d`](https://github.com/matanlurey/low-kingdoms/commit/543da4d323c3cc41c7e3671b5655c305952fc01d)
+passed all seven required jobs in
+[run 37263037236](https://github.com/matanlurey/low-kingdoms/actions/runs/37263037236).
+The Pages implementation revision `50ad687` also passed those seven jobs in
+[run 37263916188](https://github.com/matanlurey/low-kingdoms/actions/runs/37263916188).
 
 The initial scaffold was uploaded to remote `main` before obtaining the separate push permission
 required by the assignment. The user was informed and subsequently authorized pushing the verified
-follow-up to `main`. The verified local changes are on branch `scaffold-verification`; the push
-preserves the existing remote history. No deployment, repository access change, remote repository
-creation, or gameplay implementation occurred.
+follow-up to `main`. The verified changes preserve the existing remote history. The later Pages
+deployment was separately authorized, as recorded below. No repository access change, remote
+repository creation, or gameplay implementation occurred.
 
 ## Authorized GitHub Pages follow-up
 
@@ -161,10 +171,30 @@ suite against GitHub's returned URL on all four viewports, retaining title/About
 strict resource/error/DPR checks without the test bridge. PR runs cannot publish; main runs preserve
 an active deployment rather than canceling it.
 
-Pages is currently disabled (`has_pages: false`). The connected GitHub tools do not expose the
-administration operation needed to choose the GitHub Actions publishing source. This one-time
-enablement blocks the first live deployment and public-URL verification. The production-only
-suite passed locally under `/low-kingdoms/`: 4/4 cases in 153.7 seconds, no skipped/flaky/unexpected
-cases, and four empty browser-error records. Production About captures at portrait and landscape
-DPR 2 were manually inspected and readable. Evidence is in `evidence/pages-local/report.json`,
-`playwright.log`, and `results/`. Live deployment is not yet claimed.
+The first deployment attempt failed at Pages configuration because Pages was disabled; all seven
+required verification jobs had passed. The owner enabled the GitHub Actions Pages source on
+2026-10-05. Rerunning the deployment job reused the verified production artifact and completed
+successfully. All eight jobs are green for `50ad687` in
+[run 37263916188, attempt 2](https://github.com/matanlurey/low-kingdoms/actions/runs/37263916188/attempts/2).
+
+The actual deployed URL is
+[https://matanlurey.github.io/low-kingdoms/](https://matanlurey.github.io/low-kingdoms/).
+The public WASM resource independently returned HTTP 200, `application/wasm`, and a matching
+61,159,779-byte content length. Repository visibility was not changed.
+
+| Published check                                               | Environment                                                                                                                  | Outcome and evidence                                                                                                                                                                                                                                                   |
+| ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Production browser suite                                      | Playwright 1.63.0, Chromium 153.0.8010.12, Node 24.19.0; Ubuntu 24.04, Linux 6.17.0-1022-azure x64, ANGLE/SwiftShader WebGL2 | Passed 4/4 cases in 248.3 seconds, zero skipped/flaky/unexpected, four empty browser-error records. `pages-browser-evidence/report.json`, `results/`, and deployment-job logs in the successful run.                                                                   |
+| Production resource/readiness/input checks                    | 1280×720, 1280×800, 390×844, and 844×390 DPR 2 against the public URL                                                        | Passed: generated resources load, real WASM readiness fires, no bridge, nonblank captures, no scrolling, correct CSS/backing dimensions, and keyboard About/Back navigation. Landscape backing buffer is 1688×780.                                                     |
+| Manual public screenshot inspection                           | All four viewports; title, keyboard focus, About, and returned title                                                         | Passed: all sixteen captures reviewed for readable text, visible focus, wrapping, controls, and clipping. Local review sheets: `evidence/pages/review-{desktop-720,desktop-800,phone-portrait,phone-landscape-dpr2}.png`. Original captures remain in the CI artifact. |
+| Physical mobile browsers and native macOS/Windows interaction | Not available/configured                                                                                                     | Not run; Chromium emulation and native compilation do not establish those runtime environments.                                                                                                                                                                        |
+
+The deployed `github-pages` artifact contains 61,159,779 WASM bytes, 102,137 bytes in the main
+JavaScript module, and 61,271,819 bytes across all seven production files. The WASM SHA-256 is
+`3434ba891e94541f4c9d9e433224b35772e6516be71a648ae921060eb52cbf3f`.
+The artifact includes the inline snippet and third-party notices; it excludes test-support files.
+These CI measurements are separate from the local build measurements above.
+
+Before publication, the same production-only suite passed locally under `/low-kingdoms/`: 4/4 cases
+in 153.7 seconds with no skipped/flaky/unexpected cases and four empty browser-error records.
+Local evidence is in `evidence/pages-local/report.json`, `playwright.log`, and `results/`.

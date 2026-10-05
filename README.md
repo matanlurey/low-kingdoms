@@ -44,9 +44,10 @@ runtime Node requirement, CDN dependency, server application, or account system.
 locally; they do not deploy or publish anything.
 
 CI publishes the verified production WASM bundle to GitHub Pages after a merge/push to `main`
-passes every required check. Pull requests do not deploy. The expected site URL is
-`https://matanlurey.github.io/low-kingdoms/`; initial publication requires enabling GitHub Actions
-as the repository's Pages source. See [Pages deployment](docs/development.md#github-pages).
+passes every required check. Pull requests do not deploy. Open the browser build at
+[matanlurey.github.io/low-kingdoms](https://matanlurey.github.io/low-kingdoms/).
+Pages uses GitHub Actions as its publishing source. CI checks the published application with real
+Chromium after deployment. See [Pages deployment](docs/development.md#github-pages).
 
 ## Verify
 
