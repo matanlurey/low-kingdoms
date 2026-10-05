@@ -1,0 +1,9 @@
+[tools]
+rust = "1.98.0"
+node = "24.19.0"
+just = "1.43.0"
+playwright = "1.63.0"
+http-server = "14.1.1"
+prettier = "3.9.9"
+# wasm-bindgen-cli follows the resolved wasm-bindgen package in Cargo.lock.
+

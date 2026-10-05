@@ -1,0 +1,18 @@
+[package]
+name = "low-kingdoms"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+repository.workspace = true
+description = "The Low Kingdoms desktop and browser application"
+
+[features]
+default = []
+test-support = ["low-kingdoms-client/test-support"]
+
+[dependencies]
+low-kingdoms-client.workspace = true
+
+[lints]
+workspace = true
