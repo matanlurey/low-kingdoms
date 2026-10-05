@@ -41,5 +41,9 @@ The workspace adds one cross-crate bootstrap boundary and a host-tool package, b
 screen code into empty service/domain packages. Strict lint groups sometimes need a narrowly
 reasoned leaf exception for Bevy system signatures; they do not justify awkward general abstractions.
 
-There is no release service, deployment account, game content, editor integration, networking,
-serialization schema, or gameplay model. This decision does not select their future design.
+The initial scaffold deferred publishing. The owner subsequently authorized GitHub Pages delivery
+of the verified production WASM artifact after all main-branch CI gates pass, with a real-browser
+check against the returned public URL. This uses GitHub's standard Pages environment and scoped
+workflow token instead of a deployment account, personal secret, or generated-assets branch.
+There is no game content, editor integration, networking, serialization schema, or gameplay model.
+This decision does not select their future design.

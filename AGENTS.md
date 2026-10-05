@@ -72,6 +72,9 @@ Before committing a Rust/tooling change, run `just check` and the affected targe
 Use `just fmt`, `just fmt-check`, `just clippy`, `just test`, and `just doc` to run individual gates.
 Do not use indiscriminate `--all-features` builds; production and test-support configurations are distinct.
 CI uses the same maintained command implementation rather than a second script sequence.
+Authorized GitHub Pages publishing runs only for `main` after every required CI job passes.
+It deploys the production bundle already checked by the browser suite, then tests the public URL.
+Read [Pages development](docs/development.md#github-pages) before changing this deployment.
 Just uses pinned Node to pass argument arrays; direct `cargo xtask dev` needs no Node runtime.
 
 ## Quality and evidence

@@ -149,6 +149,36 @@ build/link cost and avoids the unstable path observed as zero-length thin-LTO in
 constrained hosts. The observation does not establish a universal compiler cause or guarantee;
 keep build outcomes and bundle-size measurements separate from this configuration decision.
 
+## GitHub Pages
+
+The repository owner authorized automatic browser deployment. `.github/workflows/ci.yml` publishes
+on pushes to `main`, including merged pull requests, or a manual workflow run targeting `main`.
+Pull-request runs only verify. Main runs are serialized so a new commit does not interrupt an
+active deployment; pull-request verification can replace stale runs.
+
+The browser job builds and tests production plus support bundles, then uploads only `dist/web`
+with the pinned `actions/upload-pages-artifact` action. The deployment job waits for the native
+Linux/macOS/Windows matrix, quality, WASM, browser, and native renderer checks. A failed gate blocks
+publication. It uses `github-pages`, `actions/configure-pages`, and `actions/deploy-pages`, with
+`pages: write` and `id-token: write` scoped to that job. No personal token, deployment secret, or
+generated-assets branch is needed. The downloaded game requires no GitHub credentials.
+
+Enable **Settings → Pages → Build and deployment → Source: GitHub Actions** once before the first
+deployment. This is a repository administration operation; the connected GitHub code tools do not
+expose it. GitHub Pages for a private repository requires an eligible GitHub plan. Do not change
+repository visibility to work around an unavailable plan.
+
+The expected project URL is `https://matanlurey.github.io/low-kingdoms/`. Relative loader/module/WASM
+paths preserve the project subpath; GitHub Pages supplies HTTPS and the WASM content type. Only
+production files and the third-party notices are published, with no read-only test bridge.
+
+After deploying, CI uses the exact `page_url` returned by GitHub and runs real Chromium on all four
+configured viewports. It checks resources, application readiness, captured pixels, CSS/DPR bounds,
+absence of the bridge, and keyboard About/Back navigation. These failures fail the deployment job;
+the uploaded `pages-browser-evidence` artifact retains images, errors, and traces. Record the run,
+deployed URL, actual browser/GPU environment, and manually inspected captures before claiming the
+site works. A successful artifact upload alone does not establish a working deployment.
+
 ## Dependency updates
 
 1. Identify the implemented behavior or defect requiring the change. Obtain separate scope for a

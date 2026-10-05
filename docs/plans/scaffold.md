@@ -2,7 +2,8 @@
 
 Verified on 2026-10-05. This is application infrastructure: a real Bevy title screen, About/Back,
 native Quit, and the tools needed to extend them. No gameplay, domain package, placeholder Play
-control, editor, account service, or deployment was added.
+control, editor, or account service was added. The owner subsequently requested automatic GitHub
+Pages publishing of the production WASM build.
 
 ## Decisions and implemented packages
 
@@ -150,3 +151,20 @@ required by the assignment. The user was informed and subsequently authorized pu
 follow-up to `main`. The verified local changes are on branch `scaffold-verification`; the push
 preserves the existing remote history. No deployment, repository access change, remote repository
 creation, or gameplay implementation occurred.
+
+## Authorized GitHub Pages follow-up
+
+The owner requested automatic deployment after merges to `main`. CI now uploads the exact
+production `dist/web` artifact after browser verification, waits for every required CI job, and
+deploys through the pinned official Pages actions. Its final step runs the production-only browser
+suite against GitHub's returned URL on all four viewports, retaining title/About/Back captures and
+strict resource/error/DPR checks without the test bridge. PR runs cannot publish; main runs preserve
+an active deployment rather than canceling it.
+
+Pages is currently disabled (`has_pages: false`). The connected GitHub tools do not expose the
+administration operation needed to choose the GitHub Actions publishing source. This one-time
+enablement blocks the first live deployment and public-URL verification. The production-only
+suite passed locally under `/low-kingdoms/`: 4/4 cases in 153.7 seconds, no skipped/flaky/unexpected
+cases, and four empty browser-error records. Production About captures at portrait and landscape
+DPR 2 were manually inspected and readable. Evidence is in `evidence/pages-local/report.json`,
+`playwright.log`, and `results/`. Live deployment is not yet claimed.

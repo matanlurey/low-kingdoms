@@ -43,6 +43,11 @@ The web distribution uses relative paths and can be hosted at a root URL or a su
 runtime Node requirement, CDN dependency, server application, or account system. Commands build
 locally; they do not deploy or publish anything.
 
+CI publishes the verified production WASM bundle to GitHub Pages after a merge/push to `main`
+passes every required check. Pull requests do not deploy. The expected site URL is
+`https://matanlurey.github.io/low-kingdoms/`; initial publication requires enabling GitHub Actions
+as the repository's Pages source. See [Pages deployment](docs/development.md#github-pages).
+
 ## Verify
 
 ```sh

@@ -11,18 +11,27 @@ const evidence = path.resolve(
     path.join(repositoryRoot, "evidence/web"),
 );
 
-if (!process.env.LOW_KINGDOMS_BASE_URL) {
+const deployed = process.env.LOW_KINGDOMS_DEPLOYED_URL;
+
+if (!deployed && !process.env.LOW_KINGDOMS_BASE_URL) {
   throw new Error("Set LOW_KINGDOMS_BASE_URL or run cargo xtask smoke-web.");
 }
-if (!process.env.LOW_KINGDOMS_SUBPATH_URL) {
+if (!deployed && !process.env.LOW_KINGDOMS_SUBPATH_URL) {
   throw new Error(
     "Set LOW_KINGDOMS_SUBPATH_URL to the real static subpath copy.",
   );
 }
-if (!process.env.LOW_KINGDOMS_PRODUCTION_URL) {
+if (!deployed && !process.env.LOW_KINGDOMS_PRODUCTION_URL) {
   throw new Error(
     "Set LOW_KINGDOMS_PRODUCTION_URL to a build without test hooks.",
   );
+}
+
+if (deployed) {
+  const url = new URL(deployed);
+  if (!["http:", "https:"].includes(url.protocol)) {
+    throw new Error("LOW_KINGDOMS_DEPLOYED_URL must be an HTTP(S) site URL.");
+  }
 }
 
 export default defineConfig({

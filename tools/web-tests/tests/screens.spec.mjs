@@ -2,10 +2,12 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import { expect, test } from "@playwright/test";
 
-const routes = [
-  ["root", process.env.LOW_KINGDOMS_BASE_URL],
-  ["subpath", process.env.LOW_KINGDOMS_SUBPATH_URL],
-];
+const routes = process.env.LOW_KINGDOMS_DEPLOYED_URL
+  ? []
+  : [
+      ["root", process.env.LOW_KINGDOMS_BASE_URL],
+      ["subpath", process.env.LOW_KINGDOMS_SUBPATH_URL],
+    ];
 const browserErrors = new WeakMap();
 
 function observeErrors(page) {
@@ -443,7 +445,10 @@ test("production bundle renders without diagnostic bridge", async ({
       { once: true },
     );
   });
-  await page.goto(process.env.LOW_KINGDOMS_PRODUCTION_URL);
+  await page.goto(
+    process.env.LOW_KINGDOMS_DEPLOYED_URL ??
+      process.env.LOW_KINGDOMS_PRODUCTION_URL,
+  );
   await expect(page.locator("html")).toHaveAttribute(
     "data-application-ready",
     "true",
@@ -455,6 +460,43 @@ test("production bundle renders without diagnostic bridge", async ({
   );
   await assertCanvasLayout(page);
   await capture(page, testInfo, "production-title");
+  await page.locator("#game-canvas").focus();
+  await page.keyboard.press("Tab");
+  const focusedTitle = await capture(
+    page,
+    testInfo,
+    "production-title-focused",
+  );
+  const viewport = page.viewportSize();
+  const wholeCanvas = {
+    x: 0,
+    y: 0,
+    width: viewport.width,
+    height: viewport.height,
+  };
+  await page.keyboard.press("Enter");
+  let aboutImage;
+  await expect
+    .poll(async () => {
+      aboutImage = await page
+        .locator("#game-canvas")
+        .screenshot({ scale: "css" });
+      return changedControlPixels(page, focusedTitle, aboutImage, wholeCanvas);
+    })
+    .toBeGreaterThan(2000);
+  await capture(page, testInfo, "production-about");
+  await page.keyboard.press("Escape");
+  await expect
+    .poll(async () => {
+      const returned = await page
+        .locator("#game-canvas")
+        .screenshot({ scale: "css" });
+      return changedControlPixels(page, aboutImage, returned, wholeCanvas);
+    })
+    .toBeGreaterThan(2000);
+  await capture(page, testInfo, "production-title-back");
+  await assertCanvasLayout(page);
+  expect(await bridge(page)).toBeUndefined();
   expect(errors).toEqual([]);
   await recordEnvironment(page, testInfo, errors);
 });

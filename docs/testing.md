@@ -4,6 +4,25 @@ Three layers establish different facts. Compilation checks types and target comp
 Headless Bevy checks behavior and ownership. Actual renderer captures establish displayed pixels
 only after inspection. A green result in one layer does not replace another.
 
+## Published GitHub Pages checks
+
+The Pages deployment job runs the production-only browser suite against GitHub's actual returned
+URL after all CI gates pass. It does not load a test-support bundle. To repeat the same check:
+
+```sh
+LOW_KINGDOMS_DEPLOYED_URL=https://matanlurey.github.io/low-kingdoms/ \
+LOW_KINGDOMS_EVIDENCE_DIR=evidence/pages \
+node tools/web-tests/node_modules/@playwright/test/cli.js test \
+  --config tools/web-tests/playwright.config.mjs
+```
+
+This mode runs four production cases instead of the local root/subpath support matrix. It requires
+the real WASM readiness signal, successful resources, nonblank canvas captures, matching CSS/DPR
+dimensions, no overflow/errors/bridge, and visible pixel changes from keyboard About/Back input.
+Inspect the title/About/returned-title images. The command does not deploy; the CI job publishes
+the already verified `dist/web` artifact before checking the URL. Publication failures and public
+browser failures remain distinct from successful local rendering checks.
+
 ## Non-rendering checks
 
 `just check` runs formatting, repository structure validation, strict host Clippy, unit/integration
