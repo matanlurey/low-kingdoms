@@ -48,6 +48,7 @@ platform prerequisites. A missing capability is reported with a setup/action ins
 Linux requires a native display and the X11/Wayland development/runtime libraries required by
 Winit, plus a Vulkan/OpenGL loader and usable adapter. On Debian/Ubuntu, the CI/native environment
 typically needs `libx11-dev`, `libxcursor-dev`, `libxi-dev`, `libxrandr-dev`, `libxkbcommon-dev`,
+`libxkbcommon-x11-0` (the X11 runtime companion),
 `libwayland-dev`, `libvulkan1`, Mesa drivers, and `xvfb` for virtual-display smoke checks. Install
 system packages through your OS package manager explicitly. Playwright may require additional OS
 browser libraries; its diagnostic lists them. macOS requires the command-line developer tools;
@@ -63,6 +64,9 @@ just dev-web
 The native command builds/runs the actual window. The web command rebuilds the WASM distribution,
 runs the matched `wasm-bindgen-cli` with `--target web`, and serves HTTP on port **4173** by default.
 Open the printed URL. There is no watcher or hot reload; restart the command to rebuild.
+
+The native window starts at 1280×720 logical pixels and has a 320×360 logical-pixel minimum resize
+constraint. The browser canvas follows its available viewport without that native window constraint.
 
 Static serving uses the pinned `http-server` API through `tools/web-tests/serve.mjs`, bound to
 `127.0.0.1`. Direct loopback binding avoids the CLI's unnecessary network-interface enumeration
@@ -114,6 +118,10 @@ changes need the affected renderer smoke checks and screenshot inspection.
 and npm lockfiles. The shipped web output uses relative URLs and requires HTTP; opening files with
 `file://` is unsupported. Test the same static distribution at `/` and `/low-kingdoms/`.
 
+Keep selected, visually reviewed reference captures in `docs/references/rendered/`, with their
+environment and review notes in its README. They supplement the ignored per-run `evidence/`
+artifacts and are maintained manual references, not an automatic cross-backend pixel baseline.
+
 Initial UI uses Bevy's embedded default font. No loose font/art files are needed.
 [The asset policy](../assets/README.md) and [notices](../THIRD_PARTY_NOTICES.md) govern later additions.
 Current distributions include the notices and no runtime asset directory; `assets/README.md` is
@@ -135,6 +143,11 @@ hosts. The tradeoff is less parallel code generation, not a lower runtime optimi
 Host-only `xtask` keeps its faster-build optimization override. Native release and size-oriented
 `wasm-release` remain separate profiles, and Rust stays pinned to 1.98.0. Record measured output
 rather than promising a bundle-size or load-time budget.
+
+`wasm-release` uses `opt-level = "z"` with `lto = "off"`. Disabling cross-crate LTO limits cold
+build/link cost and avoids the unstable path observed as zero-length thin-LTO intermediates on
+constrained hosts. The observation does not establish a universal compiler cause or guarantee;
+keep build outcomes and bundle-size measurements separate from this configuration decision.
 
 ## Dependency updates
 

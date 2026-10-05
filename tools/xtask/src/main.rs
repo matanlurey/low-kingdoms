@@ -259,7 +259,7 @@ fn doctor(project: &Project) -> Result<()> {
         )),
     }
     println!(
-        "Native smoke requires a desktop display and a working graphics adapter. Linux needs X11/Wayland and Vulkan or OpenGL drivers (software rendering is acceptable). Chromium also requires its OS libraries; setup never installs privileged OS packages. See docs/development.md."
+        "Native smoke requires a desktop display and a working graphics adapter. Linux needs X11/Wayland, the XKB X11 companion runtime (libxkbcommon-x11-0 on Ubuntu), and Vulkan or OpenGL drivers (software rendering is acceptable). Chromium also requires its OS libraries; setup never installs privileged OS packages. See docs/development.md."
     );
     if failures.is_empty() {
         Ok(())

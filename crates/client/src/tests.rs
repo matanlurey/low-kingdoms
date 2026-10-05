@@ -118,10 +118,30 @@ fn initializes_one_title_with_real_controls_and_text() {
 #[test]
 fn production_navigation_repeatedly_cleans_screen_descendants() {
     let mut app = test_app(true);
-    let title_entities = app.world().entities().len();
+    let nodes = |app: &mut App| {
+        app.world_mut()
+            .query_filtered::<Entity, With<Node>>()
+            .iter(app.world())
+            .collect::<Vec<_>>()
+    };
+    let title_nodes = nodes(&mut app).len();
+    // Bevy resources use entities; PreviousState is created on the first exit.
+    let live_entities = |app: &mut App| {
+        app.world_mut()
+            .query_filtered::<Entity, Without<bevy::ecs::resource::IsResource>>()
+            .iter(app.world())
+            .count()
+    };
+    let title_entities = live_entities(&mut app);
     for _ in 0..12 {
+        let old_title = nodes(&mut app);
         press_control(&mut app, Control::About);
         assert_screen(&mut app, Screen::About);
+        assert!(
+            old_title
+                .iter()
+                .all(|entity| app.world().get_entity(*entity).is_err())
+        );
         assert_eq!(
             app.world_mut()
                 .query::<&Control>()
@@ -135,9 +155,16 @@ fn production_navigation_repeatedly_cleans_screen_descendants() {
                 .iter(app.world())
                 .any(|text| text.0 == "Early development build. Gameplay is not implemented.")
         );
+        let old_about = nodes(&mut app);
         press_control(&mut app, Control::Back);
         assert_screen(&mut app, Screen::Title);
-        assert_eq!(app.world().entities().len(), title_entities);
+        assert!(
+            old_about
+                .iter()
+                .all(|entity| app.world().get_entity(*entity).is_err())
+        );
+        assert_eq!(nodes(&mut app).len(), title_nodes);
+        assert_eq!(live_entities(&mut app), title_entities);
     }
 }
 

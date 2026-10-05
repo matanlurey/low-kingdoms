@@ -16,6 +16,10 @@ extern "C" {
     fn publish_json(json: &str);
 }
 
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "Bevy injects the owned Res and Single system parameters."
+)]
 pub(super) fn publish_snapshot(
     state: Res<State<Screen>>,
     readiness: Res<PresentationReady>,

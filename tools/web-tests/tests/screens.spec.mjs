@@ -6,9 +6,11 @@ const routes = [
   ["root", process.env.LOW_KINGDOMS_BASE_URL],
   ["subpath", process.env.LOW_KINGDOMS_SUBPATH_URL],
 ];
+const browserErrors = new WeakMap();
 
 function observeErrors(page) {
   const errors = [];
+  browserErrors.set(page, errors);
   page.on("pageerror", (error) => errors.push(`pageerror: ${error.message}`));
   page.on("console", (message) => {
     if (message.type() === "error") errors.push(`console: ${message.text()}`);
@@ -23,6 +25,34 @@ function observeErrors(page) {
   });
   return errors;
 }
+
+test.afterEach(async ({ page }, testInfo) => {
+  const errors = browserErrors.get(page) ?? [];
+  const filename = testInfo.outputPath("browser-errors.json");
+  await fs.writeFile(filename, JSON.stringify(errors, null, 2));
+  await testInfo.attach("browser-errors", {
+    path: filename,
+    contentType: "application/json",
+  });
+  const diagnosticPath = testInfo.outputPath("viewport-diagnostics.json");
+  await fs.writeFile(
+    diagnosticPath,
+    JSON.stringify(
+      {
+        configuredViewport: page.viewportSize(),
+        canvas: await canvasDimensions(page),
+        application: (await bridge(page)) ?? null,
+      },
+      null,
+      2,
+    ),
+  );
+  await testInfo.attach("viewport-diagnostics", {
+    path: diagnosticPath,
+    contentType: "application/json",
+  });
+  expect(errors).toEqual([]);
+});
 
 async function bridge(page) {
   return page.evaluate(() => window.__LOW_KINGDOMS_TEST__);
@@ -43,8 +73,10 @@ async function recordEnvironment(page, testInfo, errors) {
     };
   });
   expect(graphics.webgl2).toBe(true);
-  await testInfo.attach("browser-environment", {
-    body: JSON.stringify(
+  const filename = testInfo.outputPath("browser-environment.json");
+  await fs.writeFile(
+    filename,
+    JSON.stringify(
       {
         browser: page.context().browser().version(),
         node: process.version,
@@ -59,12 +91,21 @@ async function recordEnvironment(page, testInfo, errors) {
       null,
       2,
     ),
+  );
+  await testInfo.attach("browser-environment", {
+    path: filename,
     contentType: "application/json",
   });
 }
 
 async function waitForScreen(page, screen) {
-  await expect.poll(async () => (await bridge(page))?.screen).toBe(screen);
+  await expect
+    .poll(async () => {
+      const errors = browserErrors.get(page);
+      if (errors?.length) throw new Error(errors.join("\n"));
+      return (await bridge(page))?.screen;
+    })
+    .toBe(screen);
   await expect.poll(async () => (await bridge(page))?.ready).toBe(true);
 }
 
@@ -90,8 +131,18 @@ async function assertLayout(page) {
   for (const control of state.controls) {
     expect(control.height).toBeGreaterThanOrEqual(44);
   }
-  const dimensions = await page.evaluate(() => {
+  const dimensions = await assertCanvasLayout(page);
+  expect(state.viewport.scaleFactor).toBeCloseTo(
+    dimensions.deviceScaleFactor,
+    2,
+  );
+  return state;
+}
+
+async function canvasDimensions(page) {
+  return page.evaluate(() => {
     const canvas = document.querySelector("#game-canvas");
+    if (!canvas) return null;
     const rectangle = canvas.getBoundingClientRect();
     return {
       physicalWidth: canvas.width,
@@ -101,8 +152,23 @@ async function assertLayout(page) {
       scrollWidth: document.documentElement.scrollWidth,
       scrollHeight: document.documentElement.scrollHeight,
       deviceScaleFactor: window.devicePixelRatio,
+      innerWidth: window.innerWidth,
+      innerHeight: window.innerHeight,
+      visualViewport: window.visualViewport
+        ? {
+            width: window.visualViewport.width,
+            height: window.visualViewport.height,
+            scale: window.visualViewport.scale,
+          }
+        : null,
     };
   });
+}
+
+async function assertCanvasLayout(page) {
+  const viewport = page.viewportSize();
+  const dimensions = await canvasDimensions(page);
+  expect(dimensions).not.toBeNull();
   expect(dimensions.width).toBe(viewport.width);
   expect(dimensions.height).toBe(viewport.height);
   expect(dimensions.physicalWidth).toBeGreaterThan(0);
@@ -120,11 +186,7 @@ async function assertLayout(page) {
   ).toBeLessThanOrEqual(2);
   expect(dimensions.scrollWidth).toBeLessThanOrEqual(viewport.width);
   expect(dimensions.scrollHeight).toBeLessThanOrEqual(viewport.height);
-  expect(state.viewport.scaleFactor).toBeCloseTo(
-    dimensions.deviceScaleFactor,
-    2,
-  );
-  return state;
+  return dimensions;
 }
 
 async function inspectPixels(page, screenshot) {
@@ -391,6 +453,7 @@ test("production bundle renders without diagnostic bridge", async ({
   expect(await page.evaluate(() => "__LOW_KINGDOMS_TEST__" in window)).toBe(
     false,
   );
+  await assertCanvasLayout(page);
   await capture(page, testInfo, "production-title");
   expect(errors).toEqual([]);
   await recordEnvironment(page, testInfo, errors);

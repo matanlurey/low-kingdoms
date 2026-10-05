@@ -67,5 +67,5 @@ codegen-units = 1
 [profile.wasm-release]
 inherits = "release"
 opt-level = "z"
-lto = "thin"
+lto = "off"
 codegen-units = 1

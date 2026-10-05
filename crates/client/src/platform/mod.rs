@@ -1,5 +1,8 @@
 use bevy::{prelude::*, window::WindowResolution};
 
+#[cfg(not(target_arch = "wasm32"))]
+use bevy::window::WindowResizeConstraints;
+
 #[cfg(target_arch = "wasm32")]
 mod browser;
 
@@ -29,6 +32,12 @@ pub(crate) fn window_plugin() -> WindowPlugin {
         primary_window: Some(Window {
             title: "Low Kingdoms".into(),
             resolution: WindowResolution::new(1280, 720),
+            #[cfg(not(target_arch = "wasm32"))]
+            resize_constraints: WindowResizeConstraints {
+                min_width: 320.0,
+                min_height: 360.0,
+                ..default()
+            },
             canvas: Some("#game-canvas".into()),
             fit_canvas_to_parent: true,
             // The host suppresses only menu keys, preserving browser zoom shortcuts.
@@ -49,7 +58,8 @@ pub(crate) fn configure_runtime(app: &mut App) {
         update_readiness.after(bevy::ui::UiSystems::PostLayout),
     );
     #[cfg(target_arch = "wasm32")]
-    app.add_systems(PostUpdate, browser::announce_ready.after(update_readiness));
+    app.add_systems(First, browser::sync_canvas_extent)
+        .add_systems(PostUpdate, browser::announce_ready.after(update_readiness));
     #[cfg(feature = "test-support")]
     crate::diagnostics::configure(app);
 }

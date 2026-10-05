@@ -29,7 +29,10 @@ renderer features. Native and browser smoke environments need real graphics/brow
 Development and shipping profiles, including build scripts/procedural macros, use one codegen unit
 to avoid malformed optimized objects observed on constrained build hosts. This trades parallel
 code generation for a portable build configuration; runtime dependency optimization stays at
-level 3, and the selected stable Rust pin remains 1.98.0. Just uses pinned Node for portable
+level 3, and the selected stable Rust pin remains 1.98.0. The size-oriented WASM profile disables
+LTO to limit cold build/link cost and avoid the unstable linking path observed as zero-length
+thin-LTO intermediates on constrained hosts. This records the observed failure and configuration,
+not a universal diagnosis. Just uses pinned Node for portable
 argument-array invocation of Rust tooling; a direct `cargo xtask` native path remains available.
 The development static-server wrapper binds loopback through the pinned `http-server` API so it
 does not require network-interface enumeration.

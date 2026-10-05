@@ -56,7 +56,9 @@ host-only `xtask`. It passes arguments through `spawnSync` arrays without shell 
 Direct `cargo xtask` remains the Rust-only command path; CI calls the same maintained commands.
 Only application packages are built for `wasm32-unknown-unknown`; target-building the whole workspace
 would incorrectly include host tools. Cargo profiles separate native release from size-oriented
-`wasm-release`. Native dynamic linking is not required.
+`wasm-release`, which uses size optimization, one codegen unit, and disables LTO. The LTO choice
+limits cold build/link cost and avoids the unstable linking path observed on constrained hosts;
+bundle size remains a measured property. Native dynamic linking is not required.
 
 Production output belongs in `dist/native/` and `dist/web/`. Browser test support uses
 `dist/web-test/`. Screenshots, logs, traces, and measurements belong in ignored `evidence/`.

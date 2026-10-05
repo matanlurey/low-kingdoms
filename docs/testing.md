@@ -27,8 +27,9 @@ configuration omitting Quit, and system initialization without conflicting-query
 
 `just smoke-native` runs the real native application with its windowing/rendering path. Screenshot
 support is behind `test-support`; its launch option is `--screenshot PATH`. A completed Bevy capture
-is saved before normal exit. The timeout defaults to **60 seconds**; unsuccessful capture or an
-unavailable required adapter is a nonzero failure.
+is saved before normal exit. The application capture deadline is **60 seconds**. The process
+wrapper also defaults to 60 seconds; `--timeout` changes that outer deadline, not the application
+capture ceiling. Unsuccessful capture or an unavailable required adapter is a nonzero failure.
 
 Default evidence is `evidence/native/title.png` and `evidence/native/run.log`. Inspect the image for
 the title, About/Quit controls, readability, clipped text, and a nonblank rendered screen. A delay
@@ -39,6 +40,8 @@ executed evidence is recorded separately from the configuration. It is not a per
 measurement or a physical device certification. On an interactive desktop, also
 exercise About/Back, resize, minimize/restore, normal window close, and native Quit; record the OS
 that actually ran these checks. Compilation on macOS/Windows does not claim these interactions ran.
+Native resize checks include the supported 320×360 logical-pixel minimum; the browser does not
+inherit that desktop window constraint.
 
 ## Browser smoke
 
@@ -46,8 +49,9 @@ that actually ran these checks. Compilation on macOS/Windows does not claim thes
 Playwright 1.63.0 selects Chromium **153.0.8010.12**, browser revision **1243**, for this baseline.
 Installed browser availability does not by itself establish successful WASM rendering.
 Default evidence is `evidence/web/`, including server logs, captures, browser diagnostics, and
-retained traces. The orchestration timeout defaults to **180 seconds**. Required resource failures,
-unhandled errors, readiness timeout, or a missing browser fail rather than skip.
+retained traces. The orchestration timeout defaults to **900 seconds** for the full viewport matrix
+on software renderers; individual tests and startup also have bounded deadlines. Required resource
+failures, unhandled errors, readiness timeout, or a missing browser fail rather than skip.
 
 Readiness comes from the live application. Nonzero canvas dimensions, successful resources, bridge
 observations, and screenshots complement one another. Resolving a WASM import or finding a DOM
@@ -85,6 +89,12 @@ automatically accept changed images. Keep updates separate and review text, layo
 clipping in each affected capture. Do not mask most of the screen or use broad tolerances to hide
 regressions. Exact pixel references require a consistent browser/OS/font/DPI environment and need
 not match across graphics backends.
+
+Selected, reviewed captures are maintained under `docs/references/rendered/`. Its README records
+the source environment and inspection context. These manual references supplement ignored run
+screenshots/logs/traces under `evidence/`; normal checks neither replace them nor automatically
+accept a new reference. Compare structure and readability across backends without requiring exact
+cross-backend pixel equality.
 
 Do not suppress application errors or remove failing assertions to make a suite pass. A known
 non-application graphics/browser warning may have narrow documented handling; unexpected errors

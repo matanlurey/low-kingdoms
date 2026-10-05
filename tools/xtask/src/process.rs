@@ -114,10 +114,33 @@ impl OwnedChild {
 impl Drop for OwnedChild {
     fn drop(&mut self) {
         // The child has its own process group; cleanup never targets a pre-existing server.
+        // Give Playwright time to close its detached browser before forcing group cleanup.
         #[cfg(unix)]
         {
+            let group = format!("-{}", self.child.id());
+            let signaled = Command::new("kill")
+                .args(["-TERM", "--", &group])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .is_ok_and(|status| status.success());
+            if signaled {
+                let started = Instant::now();
+                while started.elapsed() < Duration::from_secs(3) {
+                    let active = Command::new("kill")
+                        .args(["-0", "--", &group])
+                        .stdout(Stdio::null())
+                        .stderr(Stdio::null())
+                        .status()
+                        .is_ok_and(|status| status.success());
+                    if !active {
+                        break;
+                    }
+                    thread::sleep(Duration::from_millis(50));
+                }
+            }
             let _ = Command::new("kill")
-                .args(["-TERM", "--", &format!("-{}", self.child.id())])
+                .args(["-KILL", "--", &group])
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
                 .status();
@@ -139,34 +162,140 @@ impl Drop for OwnedChild {
 mod tests {
     use super::*;
     use std::fs;
+    use std::io::Write;
 
     #[test]
     fn bounded_wait_fails_and_cleans_up_the_owned_child() {
         const CHILD_FLAG: &str = "LOW_KINGDOMS_XTASK_TIMEOUT_TEST_CHILD";
-        if std::env::var_os(CHILD_FLAG).is_some() {
+        const HEARTBEAT_PATH: &str = "LOW_KINGDOMS_XTASK_TIMEOUT_TEST_HEARTBEAT";
+        let branch = std::env::var(CHILD_FLAG).ok();
+        if branch.as_deref() == Some("worker") {
+            let mut heartbeat = fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(std::env::var_os(HEARTBEAT_PATH).unwrap())
+                .unwrap();
             loop {
+                heartbeat.write_all(b".").unwrap();
                 thread::sleep(Duration::from_millis(50));
             }
+        }
+        if branch.as_deref() == Some("child") {
+            let mut worker = Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "process::tests::bounded_wait_fails_and_cleans_up_the_owned_child",
+                ])
+                .env(CHILD_FLAG, "worker")
+                .spawn()
+                .unwrap();
+            assert!(worker.wait().unwrap().success());
+            return;
         }
         let unique = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos();
         let log = std::env::temp_dir().join(format!("low-kingdoms-timeout-{unique}.log"));
+        let heartbeat =
+            std::env::temp_dir().join(format!("low-kingdoms-timeout-{unique}.heartbeat"));
         let mut command = Command::new(std::env::current_exe().unwrap());
         command
             .args([
                 "--exact",
                 "process::tests::bounded_wait_fails_and_cleans_up_the_owned_child",
             ])
-            .env(CHILD_FLAG, "1");
+            .env(CHILD_FLAG, "child")
+            .env(HEARTBEAT_PATH, &heartbeat);
         let mut child = OwnedChild::logged(&mut command, &log).unwrap();
+        let started = Instant::now();
+        while !fs::metadata(&heartbeat).is_ok_and(|metadata| metadata.len() > 0) {
+            assert!(started.elapsed() < Duration::from_secs(5));
+            assert!(child.try_wait().unwrap().is_none());
+            thread::sleep(Duration::from_millis(20));
+        }
         let error = child
             .wait(&command, Duration::from_millis(100))
             .unwrap_err();
         assert!(error.to_string().contains("exceeded"));
         assert!(child.try_wait().unwrap().is_none());
         drop(child);
+        thread::sleep(Duration::from_millis(100));
+        let stopped = fs::metadata(&heartbeat).unwrap().len();
+        thread::sleep(Duration::from_millis(100));
+        assert_eq!(fs::metadata(&heartbeat).unwrap().len(), stopped);
         fs::remove_file(log).unwrap();
+        fs::remove_file(heartbeat).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unix_cleanup_waits_for_workers_after_direct_child_exits() {
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let directory = std::env::temp_dir().join(format!("low-kingdoms-grace-{unique}"));
+        fs::create_dir(&directory).unwrap();
+        let worker = directory.join("worker.sh");
+        fs::write(
+            &worker,
+            "trap 'sleep 0.3; printf completed > \"$1\"; exit 0' TERM\nprintf ready > \"$2\"\nwhile :; do sleep 0.1; done\n",
+        )
+        .unwrap();
+        let completed = directory.join("completed");
+        let ready = directory.join("ready");
+        let mut command = Command::new("sh");
+        command
+            .args([
+                "-c",
+                "trap 'exit 0' TERM; sh \"$1\" \"$2\" \"$3\" & wait",
+                "low-kingdoms-cleanup-test",
+            ])
+            .arg(&worker)
+            .arg(&completed)
+            .arg(&ready);
+        let child = OwnedChild::logged(&mut command, &directory.join("run.log")).unwrap();
+        let started = Instant::now();
+        while !ready.exists() {
+            assert!(started.elapsed() < Duration::from_secs(5));
+            thread::sleep(Duration::from_millis(20));
+        }
+        drop(child);
+        assert_eq!(fs::read_to_string(completed).unwrap(), "completed");
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unix_cleanup_forces_workers_that_ignore_term() {
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let directory = std::env::temp_dir().join(format!("low-kingdoms-force-{unique}"));
+        fs::create_dir(&directory).unwrap();
+        let heartbeat = directory.join("heartbeat");
+        let mut command = Command::new("sh");
+        command
+            .args([
+                "-c",
+                "trap '' TERM; while :; do printf . >> \"$1\"; sleep 0.05; done",
+                "low-kingdoms-cleanup-test",
+            ])
+            .arg(&heartbeat);
+        let mut child = OwnedChild::logged(&mut command, &directory.join("run.log")).unwrap();
+        let started = Instant::now();
+        while !fs::metadata(&heartbeat).is_ok_and(|metadata| metadata.len() > 0) {
+            assert!(started.elapsed() < Duration::from_secs(5));
+            assert!(child.try_wait().unwrap().is_none());
+            thread::sleep(Duration::from_millis(20));
+        }
+        assert!(child.wait(&command, Duration::from_millis(100)).is_err());
+        drop(child);
+        let stopped = fs::metadata(&heartbeat).unwrap().len();
+        thread::sleep(Duration::from_millis(100));
+        assert_eq!(fs::metadata(&heartbeat).unwrap().len(), stopped);
+        fs::remove_dir_all(directory).unwrap();
     }
 }
