@@ -157,4 +157,5 @@ fn complete_initiative_and_passing_match() {
         },
     );
     assert_eq!(game.view_for(A).outcome, Some(Outcome::Winner(B)));
+    assert_eq!(game.view_for(A).consecutive_passes, 0);
 }

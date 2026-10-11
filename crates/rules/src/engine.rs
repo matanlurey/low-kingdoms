@@ -138,6 +138,7 @@ impl Game {
                 target,
                 defender_index,
             } => {
+                self.state.passes = 0;
                 self.attack(player, attacker_index, target, defender_index, &mut events);
                 if self.state.outcome.is_none() {
                     self.continue_action(player, &mut events);
