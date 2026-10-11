@@ -2,16 +2,16 @@
 
 **Technical and gameplay specification**
 
-| Field | Value |
-|---|---|
-| Project | Low Kingdoms |
-| Milestone | 1A — Headless Rules Engine |
-| Status | Specification complete; implementation not started |
-| Repository | https://github.com/matanlurey/low-kingdoms |
-| Language | Rust |
-| Rendering dependency | None |
-| Primary deliverable | crates/rules |
-| Next milestone | 1B — First Playable Battle |
+| Field                | Value                                              |
+| -------------------- | -------------------------------------------------- |
+| Project              | Low Kingdoms                                       |
+| Milestone            | 1A — Headless Rules Engine                         |
+| Status               | Specification complete; implementation not started |
+| Repository           | https://github.com/matanlurey/low-kingdoms         |
+| Language             | Rust                                               |
+| Rendering dependency | None                                               |
+| Primary deliverable  | crates/rules                                       |
+| Next milestone       | 1B — First Playable Battle                         |
 
 ## 1. Executive summary
 
@@ -56,67 +56,67 @@ The engine should establish a stable foundation for future mechanics without pre
 
 ### 2.1 Included
 
-| System | Milestone 1A |
-|---|---|
-| Two-player matches | Required |
-| Match initialization | Required |
-| Seeded randomness | Required |
-| Starting-player override | Required |
-| Deck shuffling | Required |
-| Opening hands | Required |
-| Mulligans | Required |
-| Resource zones | Required |
-| Resource spending | Required |
-| Alternating actions | Required |
-| Passing | Required |
-| Initiative claiming | Required |
-| Round progression | Required |
-| Unit deployment | Required |
-| Unit exhaustion | Required |
-| Unit combat | Required |
-| Stronghold combat | Required |
-| Persistent damage | Required |
-| Unit destruction | Required |
-| Discard piles | Required |
-| Deck exhaustion | Required |
-| Victory and defeat | Required |
-| Hidden information | Required |
-| Command validation | Required |
-| Structured game events | Required |
-| State serialization | Required |
-| Deterministic replay support | Required |
-| Automated testing | Required |
+| System                       | Milestone 1A |
+| ---------------------------- | ------------ |
+| Two-player matches           | Required     |
+| Match initialization         | Required     |
+| Seeded randomness            | Required     |
+| Starting-player override     | Required     |
+| Deck shuffling               | Required     |
+| Opening hands                | Required     |
+| Mulligans                    | Required     |
+| Resource zones               | Required     |
+| Resource spending            | Required     |
+| Alternating actions          | Required     |
+| Passing                      | Required     |
+| Initiative claiming          | Required     |
+| Round progression            | Required     |
+| Unit deployment              | Required     |
+| Unit exhaustion              | Required     |
+| Unit combat                  | Required     |
+| Stronghold combat            | Required     |
+| Persistent damage            | Required     |
+| Unit destruction             | Required     |
+| Discard piles                | Required     |
+| Deck exhaustion              | Required     |
+| Victory and defeat           | Required     |
+| Hidden information           | Required     |
+| Command validation           | Required     |
+| Structured game events       | Required     |
+| State serialization          | Required     |
+| Deterministic replay support | Required     |
+| Automated testing            | Required     |
 
 ### 2.2 Explicitly excluded
 
 The following systems must not be implemented during Milestone 1A:
 
-| System | Planned for later |
-|---|---|
-| Commander deployment | Yes |
-| Commander abilities | Yes |
-| Affinities | Yes |
-| Factions | Yes |
-| Action cards | Yes |
-| Upgrades | Yes |
-| Keywords | Yes |
-| Triggered abilities | Yes |
-| Persistent effects | Yes |
-| Temporary stat modifiers | Yes |
-| Healing | Yes |
-| Status effects | Yes |
-| Combat interception | Yes |
-| Unique-card restrictions | Yes |
-| Board capacity limits | Yes |
-| Deck building | Yes |
-| Campaign progression | Yes |
-| Card rewards | Yes |
-| AI opponents | Yes |
-| Automated balance simulations | Yes |
-| Multiplayer networking | Yes |
-| Game UI | Milestone 1B |
-| Card artwork and animation | Later |
-| Account or save-game services | Later |
+| System                        | Planned for later |
+| ----------------------------- | ----------------- |
+| Commander deployment          | Yes               |
+| Commander abilities           | Yes               |
+| Affinities                    | Yes               |
+| Factions                      | Yes               |
+| Action cards                  | Yes               |
+| Upgrades                      | Yes               |
+| Keywords                      | Yes               |
+| Triggered abilities           | Yes               |
+| Persistent effects            | Yes               |
+| Temporary stat modifiers      | Yes               |
+| Healing                       | Yes               |
+| Status effects                | Yes               |
+| Combat interception           | Yes               |
+| Unique-card restrictions      | Yes               |
+| Board capacity limits         | Yes               |
+| Deck building                 | Yes               |
+| Campaign progression          | Yes               |
+| Card rewards                  | Yes               |
+| AI opponents                  | Yes               |
+| Automated balance simulations | Yes               |
+| Multiplayer networking        | Yes               |
+| Game UI                       | Milestone 1B      |
+| Card artwork and animation    | Later             |
+| Account or save-game services | Later             |
 
 Strongholds are included because they are necessary for victory and defeat. They have Health but no abilities or other special mechanics during Milestone 1A.
 
@@ -124,27 +124,27 @@ Strongholds are included because they are necessary for victory and defeat. They
 
 ## 3. Terminology
 
-| Term | Definition |
-|---|---|
-| Match | A complete game between two players |
-| Player | One of two participants |
-| Round | A complete cycle of regrouping and alternating actions |
-| Action | A gameplay operation taken during the action phase |
-| Command | An external request to the engine, including setup decisions |
-| Initiative | Determines which player acts first in a round |
-| Claim Initiative | An action that secures initiative for the next round |
-| Pass | An action that temporarily declines to act |
-| Ready | A unit or resource that is available for use |
-| Exhausted | A unit or resource that cannot be used for actions requiring readiness |
-| Resource | A card placed facedown in the resource zone |
-| Power | Damage a unit deals in combat |
-| Health | Maximum damage a unit can sustain before destruction |
-| Damage | Accumulated damage on a unit or stronghold |
-| Stronghold | The player's primary objective; its destruction causes defeat |
-| Definition | Static data describing a card |
-| Instance | An individual occurrence of a card within a match |
-| Zone | A location containing cards or units |
-| Event | An immutable record describing something that happened |
+| Term             | Definition                                                             |
+| ---------------- | ---------------------------------------------------------------------- |
+| Match            | A complete game between two players                                    |
+| Player           | One of two participants                                                |
+| Round            | A complete cycle of regrouping and alternating actions                 |
+| Action           | A gameplay operation taken during the action phase                     |
+| Command          | An external request to the engine, including setup decisions           |
+| Initiative       | Determines which player acts first in a round                          |
+| Claim Initiative | An action that secures initiative for the next round                   |
+| Pass             | An action that temporarily declines to act                             |
+| Ready            | A unit or resource that is available for use                           |
+| Exhausted        | A unit or resource that cannot be used for actions requiring readiness |
+| Resource         | A card placed facedown in the resource zone                            |
+| Power            | Damage a unit deals in combat                                          |
+| Health           | Maximum damage a unit can sustain before destruction                   |
+| Damage           | Accumulated damage on a unit or stronghold                             |
+| Stronghold       | The player's primary objective; its destruction causes defeat          |
+| Definition       | Static data describing a card                                          |
+| Instance         | An individual occurrence of a card within a match                      |
+| Zone             | A location containing cards or units                                   |
+| Event            | An immutable record describing something that happened                 |
 
 The terms **MUST**, **SHOULD**, and **MAY** express implementation requirements, recommendations, and optional behavior.
 
@@ -203,21 +203,21 @@ The engine maintains one authoritative GameState. The state must contain everyth
 
 At minimum:
 
-| Field | Purpose |
-|---|---|
-| Match status | Setup, active, or finished |
-| Current phase | Mulligan, resourcing, regroup, or action |
-| Round number | Current round, beginning at 1 |
-| Initiative holder | Player with current-round initiative |
-| Next initiative holder | Player designated to start the next round |
-| Active player | Player whose action is currently expected |
-| Consecutive passes | Tracks action-phase termination |
-| Initiative claimed | Whether initiative has been claimed this round |
-| Player states | State belonging to each player |
-| Pending decisions | Submitted decisions awaiting the other player |
-| RNG state | Deterministic random generator state |
-| Next instance ID | Identifier allocation state |
-| Final result | Winner, draw, or unfinished |
+| Field                  | Purpose                                        |
+| ---------------------- | ---------------------------------------------- |
+| Match status           | Setup, active, or finished                     |
+| Current phase          | Mulligan, resourcing, regroup, or action       |
+| Round number           | Current round, beginning at 1                  |
+| Initiative holder      | Player with current-round initiative           |
+| Next initiative holder | Player designated to start the next round      |
+| Active player          | Player whose action is currently expected      |
+| Consecutive passes     | Tracks action-phase termination                |
+| Initiative claimed     | Whether initiative has been claimed this round |
+| Player states          | State belonging to each player                 |
+| Pending decisions      | Submitted decisions awaiting the other player  |
+| RNG state              | Deterministic random generator state           |
+| Next instance ID       | Identifier allocation state                    |
+| Final result           | Winner, draw, or unfinished                    |
 
 The precise internal Rust representation is an implementation detail.
 
@@ -263,12 +263,12 @@ Milestone 1A requires only basic unit cards. No actual card library or card bala
 
 A unit card definition requires:
 
-| Property | Type | Constraint |
-|---|---|---|
-| Definition ID | Stable identifier | Unique within registry |
-| Cost | Nonnegative integer | >= 0 |
-| Power | Nonnegative integer | >= 0 |
-| Health | Positive integer | > 0 |
+| Property      | Type                | Constraint             |
+| ------------- | ------------------- | ---------------------- |
+| Definition ID | Stable identifier   | Unique within registry |
+| Cost          | Nonnegative integer | >= 0                   |
+| Power         | Nonnegative integer | >= 0                   |
+| Health        | Positive integer    | > 0                    |
 
 Display names or descriptive metadata may be included if useful, but they must not influence rules resolution. No card text or abilities are supported.
 
@@ -399,11 +399,11 @@ Starting with round two, regroup executes the following operations in order.
 
 Players alternate taking one action at a time.
 
-| Action | Effect |
-|---|---|
-| Play Unit | Deploy a unit from hand |
-| Attack | Attack a unit or stronghold |
-| Pass | Temporarily decline to act |
+| Action           | Effect                               |
+| ---------------- | ------------------------------------ |
+| Play Unit        | Deploy a unit from hand              |
+| Attack           | Attack a unit or stronghold          |
+| Pass             | Temporarily decline to act           |
 | Claim Initiative | Secure initiative for the next round |
 
 An action normally transfers the opportunity to act to the opponent. Exceptions apply after an opponent has claimed initiative.
@@ -431,12 +431,12 @@ Passing consumes the player's current action opportunity. Passing does not preve
 
 A pass followed by an opponent's non-pass action does not terminate the round. Two consecutive passes terminate the action phase.
 
-| Step | Player | Action | Result |
-|---|---|---|---|
-| 1 | A | Pass | B acts |
-| 2 | B | Play Unit | A may act again |
-| 3 | A | Pass | B acts |
-| 4 | B | Pass | Round ends |
+| Step | Player | Action    | Result          |
+| ---- | ------ | --------- | --------------- |
+| 1    | A      | Pass      | B acts          |
+| 2    | B      | Play Unit | A may act again |
+| 3    | A      | Pass      | B acts          |
+| 4    | B      | Pass      | Round ends      |
 
 ### 9.3 Claiming initiative
 
@@ -450,15 +450,15 @@ Claiming initiative:
 
 The remaining player may continue taking actions.
 
-| Step | Player | Action |
-|---|---|---|
-| 1 | A | Play Unit |
-| 2 | B | Attack |
-| 3 | A | Claim Initiative |
-| 4 | B | Play Unit |
-| 5 | B | Attack |
-| 6 | B | Pass |
-| 7 | — | Round ends |
+| Step | Player | Action           |
+| ---- | ------ | ---------------- |
+| 1    | A      | Play Unit        |
+| 2    | B      | Attack           |
+| 3    | A      | Claim Initiative |
+| 4    | B      | Play Unit        |
+| 5    | B      | Attack           |
+| 6    | B      | Pass             |
+| 7    | —      | Round ends       |
 
 Player A acts first in the next round.
 
@@ -613,13 +613,13 @@ When attacking another unit:
 
 Example:
 
-| | Attacker | Defender |
-|---|---:|---:|
-| Power | 3 | 2 |
-| Health | 4 | 3 |
-| Existing damage | 1 | 0 |
-| Damage after combat | 3 | 3 |
-| Outcome | Survives at 1 remaining Health | Destroyed |
+|                     |                       Attacker |  Defender |
+| ------------------- | -----------------------------: | --------: |
+| Power               |                              3 |         2 |
+| Health              |                              4 |         3 |
+| Existing damage     |                              1 |         0 |
+| Damage after combat |                              3 |         3 |
+| Outcome             | Survives at 1 remaining Health | Destroyed |
 
 ### 12.4 Mutual destruction
 
@@ -727,12 +727,12 @@ No additional player actions may occur after the match ends.
 
 ### 14.3 Match outcomes
 
-| Outcome | Condition |
-|---|---|
-| Player 0 wins | Player 1's stronghold is destroyed |
-| Player 1 wins | Player 0's stronghold is destroyed |
-| Draw | Both strongholds are destroyed in the same simultaneous resolution |
-| In progress | Neither victory condition has occurred |
+| Outcome       | Condition                                                          |
+| ------------- | ------------------------------------------------------------------ |
+| Player 0 wins | Player 1's stronghold is destroyed                                 |
+| Player 1 wins | Player 0's stronghold is destroyed                                 |
+| Draw          | Both strongholds are destroyed in the same simultaneous resolution |
+| In progress   | Neither victory condition has occurred                             |
 
 Draws are supported for correctness even though the initial combat mechanics are unlikely to produce them outside simultaneous deck exhaustion.
 
@@ -937,18 +937,18 @@ Events must be typed, immutable, deterministically ordered, independent of rende
 
 ### 17.2 Event categories
 
-| Category | Example events |
-|---|---|
-| Setup | MatchInitialized, StartingPlayerSelected |
-| Deck | DeckShuffled, CardsDrawn |
-| Mulligan | MulliganCompleted |
-| Resources | CardsResourced, ResourcesExhausted, ResourcesReadied |
-| Round | RoundStarted, RoundEnded |
-| Actions | PlayerPassed, InitiativeClaimed |
-| Deployment | UnitPlayed |
-| Combat | AttackDeclared, DamageDealt, UnitDestroyed |
-| Fatigue | DeckExhaustionDamage |
-| Victory | GameEnded |
+| Category   | Example events                                       |
+| ---------- | ---------------------------------------------------- |
+| Setup      | MatchInitialized, StartingPlayerSelected             |
+| Deck       | DeckShuffled, CardsDrawn                             |
+| Mulligan   | MulliganCompleted                                    |
+| Resources  | CardsResourced, ResourcesExhausted, ResourcesReadied |
+| Round      | RoundStarted, RoundEnded                             |
+| Actions    | PlayerPassed, InitiativeClaimed                      |
+| Deployment | UnitPlayed                                           |
+| Combat     | AttackDeclared, DamageDealt, UnitDestroyed           |
+| Fatigue    | DeckExhaustionDamage                                 |
+| Victory    | GameEnded                                            |
 
 Exact names are not prescribed. Do not introduce an event hierarchy larger than required.
 
@@ -988,20 +988,20 @@ Hidden information is part of the rules engine's responsibility. It must not be 
 
 ### 18.1 Visibility matrix
 
-| Information | Owner | Opponent |
-|---|---|---|
-| Own hand | Full | Count only |
-| Opponent hand | Count only | Full |
-| Own deck order | Hidden | Hidden |
-| Deck size | Visible | Visible |
-| Own resources | Full | Count/readiness only |
-| Opponent resources | Count/readiness only | Full |
-| Battlefield units | Full | Full |
-| Unit statistics | Full | Full |
-| Unit damage | Full | Full |
-| Discard piles | Full | Full |
-| Stronghold Health | Full | Full |
-| Initiative | Full | Full |
+| Information        | Owner                | Opponent             |
+| ------------------ | -------------------- | -------------------- |
+| Own hand           | Full                 | Count only           |
+| Opponent hand      | Count only           | Full                 |
+| Own deck order     | Hidden               | Hidden               |
+| Deck size          | Visible              | Visible              |
+| Own resources      | Full                 | Count/readiness only |
+| Opponent resources | Count/readiness only | Full                 |
+| Battlefield units  | Full                 | Full                 |
+| Unit statistics    | Full                 | Full                 |
+| Unit damage        | Full                 | Full                 |
+| Discard piles      | Full                 | Full                 |
+| Stronghold Health  | Full                 | Full                 |
+| Initiative         | Full                 | Full                 |
 
 ### 18.2 Player-specific views
 
@@ -1163,20 +1163,20 @@ The engine must use structured errors rather than panics for invalid input or il
 
 ### 22.1 Error categories
 
-| Error | Meaning |
-|---|---|
-| InvalidConfiguration | Match configuration is invalid |
-| UnknownCardDefinition | Referenced definition does not exist |
-| InvalidPlayer | Player identifier is invalid |
-| WrongPhase | Command cannot be executed in current phase |
-| NotYourAction | Player is not eligible to act |
-| InvalidCard | Referenced card is unavailable or invalid |
-| InsufficientResources | Card cost cannot be paid |
-| UnitExhausted | Attacking unit is not ready |
-| InvalidTarget | Target is not a legal enemy |
+| Error                    | Meaning                                      |
+| ------------------------ | -------------------------------------------- |
+| InvalidConfiguration     | Match configuration is invalid               |
+| UnknownCardDefinition    | Referenced definition does not exist         |
+| InvalidPlayer            | Player identifier is invalid                 |
+| WrongPhase               | Command cannot be executed in current phase  |
+| NotYourAction            | Player is not eligible to act                |
+| InvalidCard              | Referenced card is unavailable or invalid    |
+| InsufficientResources    | Card cost cannot be paid                     |
+| UnitExhausted            | Attacking unit is not ready                  |
+| InvalidTarget            | Target is not a legal enemy                  |
 | DecisionAlreadySubmitted | Player already completed this phase decision |
-| InitiativeUnavailable | Initiative has already been claimed |
-| GameAlreadyFinished | Match is terminal |
+| InitiativeUnavailable    | Initiative has already been claimed          |
+| GameAlreadyFinished      | Match is terminal                            |
 
 The final Rust error types should reflect actual operations rather than reproducing this table mechanically.
 
@@ -1482,48 +1482,48 @@ Milestone 1A is complete when all of the following are true.
 
 ### 25.1 Functional acceptance
 
-| ID | Criterion |
-|---|---|
-| F01 | Two-player matches initialize successfully |
+| ID  | Criterion                                                   |
+| --- | ----------------------------------------------------------- |
+| F01 | Two-player matches initialize successfully                  |
 | F02 | Starting-player selection is deterministic and overrideable |
-| F03 | Decks shuffle reproducibly |
-| F04 | Opening hands and mulligans work |
-| F05 | Initial resources work |
-| F06 | Regroup phases work |
-| F07 | Alternating actions work |
-| F08 | Passing and claiming initiative work |
-| F09 | Unit deployment works |
-| F10 | Resource payments work |
-| F11 | Unit exhaustion and readiness work |
-| F12 | Unit combat works |
-| F13 | Stronghold attacks work |
-| F14 | Persistent damage works |
-| F15 | Unit destruction works |
-| F16 | Deck exhaustion damage works |
-| F17 | Victory and defeat work |
-| F18 | Hidden information is respected |
-| F19 | Invalid commands do not mutate state |
-| F20 | Complete matches can be played headlessly |
+| F03 | Decks shuffle reproducibly                                  |
+| F04 | Opening hands and mulligans work                            |
+| F05 | Initial resources work                                      |
+| F06 | Regroup phases work                                         |
+| F07 | Alternating actions work                                    |
+| F08 | Passing and claiming initiative work                        |
+| F09 | Unit deployment works                                       |
+| F10 | Resource payments work                                      |
+| F11 | Unit exhaustion and readiness work                          |
+| F12 | Unit combat works                                           |
+| F13 | Stronghold attacks work                                     |
+| F14 | Persistent damage works                                     |
+| F15 | Unit destruction works                                      |
+| F16 | Deck exhaustion damage works                                |
+| F17 | Victory and defeat work                                     |
+| F18 | Hidden information is respected                             |
+| F19 | Invalid commands do not mutate state                        |
+| F20 | Complete matches can be played headlessly                   |
 
 ### 25.2 Technical acceptance
 
-| ID | Criterion |
-|---|---|
-| T01 | Rules crate has no Bevy dependency |
-| T02 | State transitions are deterministic |
-| T03 | Commands are explicitly validated |
-| T04 | Structured events are emitted |
-| T05 | Player-specific views are supported |
-| T06 | State serialization works |
-| T07 | Snapshot restoration works |
-| T08 | Deterministic replay works |
-| T09 | Complete scripted matches pass |
-| T10 | Existing strict Rust lints pass |
-| T11 | Existing repository tests remain passing |
+| ID  | Criterion                                          |
+| --- | -------------------------------------------------- |
+| T01 | Rules crate has no Bevy dependency                 |
+| T02 | State transitions are deterministic                |
+| T03 | Commands are explicitly validated                  |
+| T04 | Structured events are emitted                      |
+| T05 | Player-specific views are supported                |
+| T06 | State serialization works                          |
+| T07 | Snapshot restoration works                         |
+| T08 | Deterministic replay works                         |
+| T09 | Complete scripted matches pass                     |
+| T10 | Existing strict Rust lints pass                    |
+| T11 | Existing repository tests remain passing           |
 | T12 | Native compilation works on supported CI platforms |
-| T13 | Rules crate compiles for WebAssembly |
-| T14 | Public APIs are documented |
-| T15 | Architecture and agent documentation are updated |
+| T13 | Rules crate compiles for WebAssembly               |
+| T14 | Public APIs are documented                         |
+| T15 | Architecture and agent documentation are updated   |
 
 ### 25.3 Verification commands
 
@@ -1598,25 +1598,25 @@ Implement comprehensive deterministic tests, complete scripted matches, invarian
 
 The following summarizes the confirmed gameplay decisions from the interview.
 
-| # | Decision | Rule |
-|---|---|---|
-| 1 | Scope | Minimal playable rules engine |
-| 2 | Initiative | Players may claim initiative |
-| 3 | Passing | SWU-style passing and initiative |
-| 4 | Starting player | Seeded random with explicit override |
-| 5 | Mulligans | One full-hand mulligan |
-| 6 | Initial resources | Up to two cards |
-| 7 | Resource visibility | Facedown, owner-visible |
-| 8 | Deck exhaustion | Three stronghold damage per missing draw |
-| 9 | Round structure | Draw, resource, ready, action |
-| 10 | Unit readiness | Units enter exhausted |
-| 11 | Combat | Simultaneous damage, persistent wounds |
-| 12 | Targeting | Unrestricted enemy unit or stronghold targeting |
-| 13 | Statistics | Base statistics plus accumulated damage |
-| 14 | Battlefield | Unlimited units and duplicates |
-| 15 | Resource payment | Automatic deterministic exhaustion |
-| 16 | Action economy | One card per action |
-| 17 | Engine control | Explicit command-driven API |
+| #   | Decision            | Rule                                            |
+| --- | ------------------- | ----------------------------------------------- |
+| 1   | Scope               | Minimal playable rules engine                   |
+| 2   | Initiative          | Players may claim initiative                    |
+| 3   | Passing             | SWU-style passing and initiative                |
+| 4   | Starting player     | Seeded random with explicit override            |
+| 5   | Mulligans           | One full-hand mulligan                          |
+| 6   | Initial resources   | Up to two cards                                 |
+| 7   | Resource visibility | Facedown, owner-visible                         |
+| 8   | Deck exhaustion     | Three stronghold damage per missing draw        |
+| 9   | Round structure     | Draw, resource, ready, action                   |
+| 10  | Unit readiness      | Units enter exhausted                           |
+| 11  | Combat              | Simultaneous damage, persistent wounds          |
+| 12  | Targeting           | Unrestricted enemy unit or stronghold targeting |
+| 13  | Statistics          | Base statistics plus accumulated damage         |
+| 14  | Battlefield         | Unlimited units and duplicates                  |
+| 15  | Resource payment    | Automatic deterministic exhaustion              |
+| 16  | Action economy      | One card per action                             |
+| 17  | Engine control      | Explicit command-driven API                     |
 
 These decisions are locked for Milestone 1A. Changes should require an explicit rules decision rather than being introduced opportunistically during implementation.
 
@@ -1624,28 +1624,28 @@ These decisions are locked for Milestone 1A. Changes should require an explicit 
 
 The interview established the gameplay rules above. Several supporting details were not individually decided but are necessary to produce a complete implementation specification.
 
-| Detail | Default |
-|---|---|
-| Players | Exactly two |
-| Stronghold Health | Supplied by match configuration |
-| Minimum normal deck size | Six cards |
-| Maximum deck size | Not enforced |
-| Hand-size limit | None |
-| First-round regroup | Skipped |
-| Mulligan decisions | Buffered until both players submit |
-| Resourcing decisions | Buffered until both players submit |
-| Command processing | Atomic |
-| Automatic resource spending | Ascending instance-ID order |
-| Card instance identifiers | Stable, never reused |
-| Discard visibility | Public |
-| Simultaneous lethal deck exhaustion | Draw |
-| Game duration | No round limit |
-| Invalid commands | Structured errors; no mutation |
-| Randomness | Explicit deterministic PRNG |
-| Snapshot format | Versioned serialization |
-| Card definitions | Injected into engine |
-| Effects system | Not implemented |
-| AI | Not implemented |
+| Detail                              | Default                            |
+| ----------------------------------- | ---------------------------------- |
+| Players                             | Exactly two                        |
+| Stronghold Health                   | Supplied by match configuration    |
+| Minimum normal deck size            | Six cards                          |
+| Maximum deck size                   | Not enforced                       |
+| Hand-size limit                     | None                               |
+| First-round regroup                 | Skipped                            |
+| Mulligan decisions                  | Buffered until both players submit |
+| Resourcing decisions                | Buffered until both players submit |
+| Command processing                  | Atomic                             |
+| Automatic resource spending         | Ascending instance-ID order        |
+| Card instance identifiers           | Stable, never reused               |
+| Discard visibility                  | Public                             |
+| Simultaneous lethal deck exhaustion | Draw                               |
+| Game duration                       | No round limit                     |
+| Invalid commands                    | Structured errors; no mutation     |
+| Randomness                          | Explicit deterministic PRNG        |
+| Snapshot format                     | Versioned serialization            |
+| Card definitions                    | Injected into engine               |
+| Effects system                      | Not implemented                    |
+| AI                                  | Not implemented                    |
 
 These are implementation defaults, not additional card or combat-design decisions. They may be revisited if concrete implementation or testing evidence demonstrates a problem.
 
