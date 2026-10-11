@@ -386,7 +386,7 @@ fn formatting(project: &Project, check_only: bool) -> Result<()> {
         "docs/**/*.md",
         ".agents/**/*.md",
         ".github/**/*.yml",
-        "crates/client/AGENTS.md",
+        "crates/*/AGENTS.md",
         "assets/README.md",
         "web/**/*.{html,js,css}",
         "tools/web-tests/**/*.{json,mjs,js}",
@@ -446,6 +446,8 @@ fn check_web(project: &Project) -> Result<()> {
                 "low-kingdoms",
                 "-p",
                 "low-kingdoms-client",
+                "-p",
+                "low-kingdoms-rules",
             ]);
             if let Some(features) = features {
                 command.args(["--features", features]);

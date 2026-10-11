@@ -30,7 +30,7 @@ tests and doctests, and rustdoc with warnings denied. Structural validation read
 and checks package boundaries, inherited lints/unpublished metadata, required document paths, and
 skill YAML front matter. It is a maintenance check, not a second architecture framework.
 
-`just check-web` separately checks/lints application packages for `wasm32-unknown-unknown`, including
+`just check-web` separately checks/lints application and rules packages for `wasm32-unknown-unknown`, including
 the supported production and non-default `test-support` configurations. It does not target-build
 host-only `xtask`. No universal `--all-features` gate is used.
 
@@ -41,6 +41,31 @@ renderer evidence. Tests update through deferred operations and real state trans
 The behavior checks cover one title root and expected text/controls, About/Back through the
 production activation path, repeated transition cleanup, keyboard focus/activation, browser
 configuration omitting Quit, and system initialization without conflicting-query panics.
+
+## Headless rules acceptance
+
+Run `cargo test --locked -p low-kingdoms-rules`; these tests require no display, GPU, browser, or
+Bevy. `tests/headless.rs` owns small anonymous fixtures and imports focused acceptance cases.
+The suite uses only public commands/views and privileged snapshot JSON for invariants/corruption.
+
+- `cases/matches.rs`: complete combat, deck-exhaustion, and initiative/passing games.
+- `cases/rules.rs`: configuration, seeded setup, full-hand mulligans, buffered selections,
+  zero/one/two initial resources, payment/readiness, duplicate units, unlimited battlefield,
+  simultaneous combat/retaliation, persistent damage, fatigue/draws, and arithmetic boundaries.
+- `cases/privacy.rs`: safe views, event redaction, private pending decisions, error privacy,
+  and complete legal-command discovery validated against actual application.
+- `cases/snapshots.rs`: pending setup/regroup decisions, claims, damaged units and terminal
+  round trips; identical continuation/events; replay across seeds/overrides; incompatible catalogs,
+  versions, malformed state, and round-counter overflow rejection.
+- `cases/invariants.rs`: 32 deterministic legal command walks check every step for card conservation,
+  globally unique/stable IDs, no lethal live units, eligible actors, exact restore/continuation,
+  and terminal immutability. This adds no property-testing framework or production AI.
+- Private RNG unit tests pin the SplitMix64 reference stream and shuffle permutation.
+
+Strict all-targets Clippy and warnings-denied rustdoc cover the public API. `just check-web` also
+checks/lints the rules crate for WASM. Compilation establishes WASM compatibility; native tests
+establish executed headless behavior, without claiming a WASM runtime or physical device test.
+See `docs/plans/milestone-1a-acceptance.md` for criterion mapping and actual verification evidence.
 
 ## Native smoke
 

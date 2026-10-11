@@ -18,7 +18,14 @@ description: Add or refactor Low Kingdoms Rust code, public APIs, errors, depend
 6. Run `just fmt`, `just clippy`, `just test`, and `just doc`, or `just check` for the combined gate.
    Run `just check-web` when application APIs, dependencies, or features affect WASM.
 7. Review the diff for blanket allowances, accidental public items, placeholders, unnecessary
-   dependencies, and unrelated lockfile churn. Record meaningful outcomes in `docs/plans/scaffold.md`.
+   dependencies, and unrelated lockfile churn. Record presentation outcomes in `docs/plans/scaffold.md`
+   and rules outcomes in `docs/plans/milestone-1a-acceptance.md`.
+
+For rules changes, also read `crates/rules/AGENTS.md` and the complete approved Milestone 1A spec.
+Run the rules crate's focused tests, strict all-targets Clippy, and WASM compilation. `just check`
+includes the rules crate's tests/docs/lints; `just check-web` target-checks the rules and application
+packages without host tooling. Review hidden-information projection, validation-before-mutation,
+canonical ordering, snapshot compatibility, and deterministic replay when those interfaces change.
 
 Do not upgrade Bevy, disable `pedantic`/`nursery`, or weaken documentation checks to repair a local
 error. Use explicit production/test-support configurations rather than `--all-features`.
