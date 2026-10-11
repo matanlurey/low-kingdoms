@@ -54,6 +54,33 @@ system packages through your OS package manager explicitly. Playwright may requi
 browser libraries; its diagnostic lists them. macOS requires the command-line developer tools;
 Windows requires the Rust MSVC toolchain and corresponding Visual Studio build tools.
 
+## Headless rules iteration
+
+The authoritative rules are in `docs/plans/milestone-1a.md`. The engine is independent of Bevy;
+its API and deterministic ordering are documented in `docs/architecture.md` and generated rustdoc.
+Injected anonymous unit definitions suffice to execute complete matches. No client integration
+or designed card library is included in 1A.
+
+```sh
+cargo test --locked -p low-kingdoms-rules
+cargo clippy --locked -p low-kingdoms-rules --all-targets -- -D warnings
+cargo check --locked -p low-kingdoms-rules --target wasm32-unknown-unknown
+cargo tree --locked -p low-kingdoms-rules
+just check
+just check-web
+```
+
+The workspace gates include rules tests, Clippy, rustdoc, metadata, and crate-local instructions.
+The WASM gate checks/lints the rules library alongside the client and executable while excluding
+host tools. All existing CI jobs continue to use these commands; the native matrix executes the
+headless rules suite on Linux, macOS, and Windows. Renderer smoke gates remain in place.
+
+`Game::new(config, definitions)` returns a game and initialization events. Submit typed decisions
+with `game.apply(player, &command)`; inspect `game.view_for(player)` and filtered
+`events.for_player(player)`. Record `LoggedCommand` entries externally for `Game::replay`.
+Never deliver authoritative snapshots to player-facing code. Snapshot JSON and injected catalogs
+are sufficient for exact continuation; filesystem, database, and networking infrastructure are absent.
+
 ## Native and browser iteration
 
 ```sh
@@ -107,7 +134,7 @@ changes need the affected renderer smoke checks and screenshot inspection.
 | `just test`         | Host unit/integration tests and doctests; no GPU required.           |
 | `just doc`          | First-party documentation with warnings denied.                      |
 | `just check`        | Formatting, structural checks, host lints, tests, and docs.          |
-| `just check-web`    | Compile/lint the actual application packages for WASM.               |
+| `just check-web`    | Compile/lint the application and rules packages for WASM.            |
 | `just smoke-native` | Actual native renderer, completed screenshot, bounded failure.       |
 | `just smoke-web`    | Generated bundles, real Chromium input, screenshots, and traces.     |
 | `just check-all`    | All mandatory gates, including native/browser rendering.             |

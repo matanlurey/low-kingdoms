@@ -1,8 +1,9 @@
 # Working in Low Kingdoms
 
-Low Kingdoms is a private Rust/Bevy application scaffold.
-It currently contains application infrastructure: a title screen, About, and navigation.
-Gameplay is outside this assignment. Do not introduce gameplay content, domain types, or placeholder APIs.
+Low Kingdoms is a private Rust/Bevy application with a Bevy-independent headless rules engine.
+The client contains a title screen, About, and navigation. Milestone 1A implements rules only;
+its authoritative specification is [milestone-1a.md](docs/plans/milestone-1a.md).
+Do not introduce Milestone 1B integration, card content, abilities, or placeholder gameplay APIs.
 Do not add a Start, Play, or Continue control until gameplay is actually implemented and authorized.
 
 ## Before editing
@@ -10,7 +11,9 @@ Do not add a Start, Play, or Continue control until gameplay is actually impleme
 1. Inspect `git status` and preserve unrelated work.
 2. Read this file, [STYLE_GUIDE.md](STYLE_GUIDE.md), and the instructions applicable to each edited directory.
 3. For `crates/client/`, read [its AGENTS.md](crates/client/AGENTS.md) explicitly.
-4. Read [the active plan](docs/plans/scaffold.md) and identify the smallest observable change.
+4. Read the applicable plan: [scaffold](docs/plans/scaffold.md) for presentation or
+   [Milestone 1A](docs/plans/milestone-1a.md) for rules, plus its
+   [acceptance record](docs/plans/milestone-1a-acceptance.md).
 5. Apply an appropriate repository-local skill rather than inventing another workflow.
 
 The maintained skills are:
@@ -25,6 +28,7 @@ The maintained skills are:
 | ----------------- | --------------------------------------------------------------------- |
 | `apps/game`       | Thin executable entry point, package and binary `low-kingdoms`.       |
 | `crates/client`   | Application composition, screens, UI interaction, and platform edges. |
+| `crates/rules`    | Authoritative, deterministic, renderer-independent match rules.       |
 | `tools/xtask`     | Host-only command orchestration; never an application dependency.     |
 | `tools/web-tests` | Development-only browser tests against generated WASM bundles.        |
 | `web`             | Static canvas host, loader, and CSS; no separate menu implementation. |
@@ -34,7 +38,8 @@ The dependency direction is executable to client to Bevy.
 The host tool must not pull in the renderer. Target-build the application packages for WASM, not the workspace.
 Use the same production screen/navigation plugins in native, WASM, and headless tests.
 Keep platform-specific work at `crates/client/src/platform/` and launch configuration at the application edge.
-Future domain code belongs in an ordinary Bevy-independent Rust library, documented but not created here.
+Gameplay state and transitions belong in `crates/rules`; read its [AGENTS.md](crates/rules/AGENTS.md).
+It depends only on Serde/JSON, never on Bevy, the client, or host tools. Client integration is 1B.
 See [architecture](docs/architecture.md) for the implemented boundaries.
 
 ## Versions and dependencies
@@ -61,13 +66,16 @@ just dev-web          # rebuild and serve the actual WASM application
 just build            # native release distribution
 just build-web        # production static distribution
 just check            # formatting, structure, host lints, tests, and docs; no GPU
-just check-web        # separate application WASM compile/lint gate
+just check-web        # application and rules WASM compile/lint gate
 just smoke-native     # real native renderer; capture evidence or fail
 just smoke-web        # real browser, generated bundle, input, and screenshots
 just check-all        # all mandatory gates, including rendering
 ```
 
 For focused iteration, use `cargo check --locked -p low-kingdoms-client`, then relevant tests.
+For rules changes, run `cargo test --locked -p low-kingdoms-rules`, its strict all-targets Clippy,
+and its `wasm32-unknown-unknown` check. `just check` includes rules tests/docs/lints;
+`just check-web` includes rules target compilation/linting alongside the application.
 Before committing a Rust/tooling change, run `just check` and the affected target/rendering gates.
 Use `just fmt`, `just fmt-check`, `just clippy`, `just test`, and `just doc` to run individual gates.
 Do not use indiscriminate `--all-features` builds; production and test-support configurations are distinct.
