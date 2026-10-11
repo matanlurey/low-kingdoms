@@ -26,14 +26,15 @@ fn check_packages(project: &Project) -> Result<()> {
     let members = metadata["workspace_members"]
         .as_array()
         .ok_or_else(|| Failure::new("Cargo metadata did not contain workspace_members"))?;
-    if packages.len() != 3 || members.len() != 3 {
+    if packages.len() != 4 || members.len() != 4 {
         return Err(Failure::new(
-            "Scaffold must have exactly its three implemented packages",
+            "Workspace must have exactly its four implemented packages",
         ));
     }
     for (name, relative) in [
         ("low-kingdoms", "apps/game/Cargo.toml"),
         ("low-kingdoms-client", "crates/client/Cargo.toml"),
+        ("low-kingdoms-rules", "crates/rules/Cargo.toml"),
         ("xtask", "tools/xtask/Cargo.toml"),
     ] {
         let package = packages
@@ -70,6 +71,8 @@ fn check_packages(project: &Project) -> Result<()> {
             if (name != "xtask" && dependency_name == "xtask")
                 || (name == "xtask" && dependency_name.starts_with("bevy"))
                 || (name == "low-kingdoms" && dependency_name != "low-kingdoms-client")
+                || (name == "low-kingdoms-rules"
+                    && !matches!(dependency_name, "serde" | "serde_json"))
             {
                 return Err(Failure::new(format!(
                     "Invalid package boundary: {name} depends on {dependency_name}"
@@ -87,6 +90,7 @@ fn check_documents(project: &Project) -> Result<()> {
         "STYLE_GUIDE.md",
         "THIRD_PARTY_NOTICES.md",
         "crates/client/AGENTS.md",
+        "crates/rules/AGENTS.md",
         "assets/README.md",
         "docs/architecture.md",
         "docs/development.md",
@@ -94,6 +98,8 @@ fn check_documents(project: &Project) -> Result<()> {
         "docs/decisions/0001-scaffold.md",
         "docs/references/bevy.md",
         "docs/plans/scaffold.md",
+        "docs/plans/milestone-1a.md",
+        "docs/plans/milestone-1a-acceptance.md",
     ] {
         let path = project.root.join(relative);
         if !path.is_file() {
