@@ -748,13 +748,13 @@ The engine operates through explicit commands submitted by an external caller. T
 
 The exact Rust API may differ, but the architecture should resemble:
 
-~~~rust
+```rust
 let mut game = Game::new(config)?;
 
 let result = game.apply(player_id, command)?;
 
 let view = game.view_for(player_id);
-~~~
+```
 
 The result of applying a command should contain structured events and enough information for the caller to determine the next required interaction.
 
@@ -766,34 +766,34 @@ Commands are organized by phase.
 
 **Mulligan commands:**
 
-~~~rust
+```rust
 KeepHand
 MulliganHand
-~~~
+```
 
 **Initial resource command:**
 
-~~~rust
+```rust
 ChooseInitialResources {
     cards: Vec<CardInstanceId>,
 }
-~~~
+```
 
 An empty collection means the player chooses no resources.
 
 **Regroup resource command:**
 
-~~~rust
+```rust
 ChooseRegroupResource {
     card: Option<CardInstanceId>,
 }
-~~~
+```
 
 None means the player chooses not to resource a card.
 
 **Action-phase commands:**
 
-~~~rust
+```rust
 PlayUnit {
     card: CardInstanceId,
 }
@@ -806,16 +806,16 @@ Attack {
 Pass
 
 ClaimInitiative
-~~~
+```
 
 Attack targets must explicitly distinguish units from strongholds:
 
-~~~rust
+```rust
 enum AttackTarget {
     Unit(CardInstanceId),
     Stronghold(PlayerId),
 }
-~~~
+```
 
 These examples describe the intended interface, not mandatory Rust declarations.
 
@@ -864,7 +864,7 @@ Errors must be structured and actionable. An invalid command must never crash th
 
 The match lifecycle must be explicit.
 
-~~~text
+```text
 Match Created
       |
       v
@@ -892,7 +892,7 @@ At any point where a stronghold is destroyed:
       |
       v
  Game Finished
-~~~
+```
 
 ### 16.1 Phase progression
 
@@ -1007,9 +1007,9 @@ Hidden information is part of the rules engine's responsibility. It must not be 
 
 The engine must expose a safe method for obtaining a player's perspective, conceptually:
 
-~~~rust
+```rust
 game.view_for(player_id)
-~~~
+```
 
 The result must not reveal information the player is not entitled to know.
 
@@ -1141,9 +1141,9 @@ The caller must be able to determine:
 
 The exact API is flexible, conceptually:
 
-~~~rust
+```rust
 game.legal_commands_for(player_id)
-~~~
+```
 
 The engine may return complete legal commands or structured legal-action information sufficient to construct them.
 
@@ -1210,7 +1210,7 @@ Extend the existing repository with a new crate.
 
 Suggested structure:
 
-~~~text
+```text
 low-kingdoms/
 ├── apps/
 │   └── game/
@@ -1238,7 +1238,7 @@ low-kingdoms/
 │       ├── scaffold.md
 │       └── milestone-1a.md
 └── Cargo.toml
-~~~
+```
 
 This is a suggested module layout, not a requirement to create every listed file. Prefer fewer modules when the implementation remains clear.
 
@@ -1264,7 +1264,7 @@ Do not add libraries for speculative features.
 
 The intended future dependency structure is:
 
-~~~text
+```text
 apps/game
     |
     v
@@ -1272,7 +1272,7 @@ crates/client
     |
     v
 crates/rules
-~~~
+```
 
 The rules crate must never depend on the client crate.
 
@@ -1332,6 +1332,7 @@ The implementation should prioritize readable, deterministic tests over elaborat
 ### 24.1 Unit tests
 
 **Initialization:**
+
 - Two players are initialized.
 - Decks are shuffled deterministically.
 - Both players receive six cards.
@@ -1340,6 +1341,7 @@ The implementation should prioritize readable, deterministic tests over elaborat
 - Invalid configurations are rejected.
 
 **Mulligans:**
+
 - Keeping a hand preserves it.
 - Mulligans return and reshuffle the original six cards.
 - Exactly six replacement cards are drawn.
@@ -1348,6 +1350,7 @@ The implementation should prioritize readable, deterministic tests over elaborat
 - Submitted decision order does not change the result.
 
 **Initial resources:**
+
 - Zero, one, or two resources are legal.
 - More than two is rejected.
 - Selected cards leave the hand.
@@ -1355,6 +1358,7 @@ The implementation should prioritize readable, deterministic tests over elaborat
 - Opponents cannot inspect resourced card identities.
 
 **Round progression:**
+
 - Round one skips regroup.
 - Later rounds draw two cards.
 - Players may resource up to one card.
@@ -1362,6 +1366,7 @@ The implementation should prioritize readable, deterministic tests over elaborat
 - Initiative determines the starting player.
 
 **Actions:**
+
 - Actions alternate correctly.
 - Playing a unit consumes one action.
 - Passing does not permanently end a player's actions.
@@ -1372,6 +1377,7 @@ The implementation should prioritize readable, deterministic tests over elaborat
 - Initiative persists if nobody claims it.
 
 **Resources:**
+
 - Costs are enforced.
 - Zero-cost cards can be played.
 - Payment exhausts exactly required resources.
@@ -1380,6 +1386,7 @@ The implementation should prioritize readable, deterministic tests over elaborat
 - Resources ready during regroup.
 
 **Unit deployment:**
+
 - Units enter exhausted.
 - Units cannot attack immediately.
 - Units become ready during regroup.
@@ -1387,6 +1394,7 @@ The implementation should prioritize readable, deterministic tests over elaborat
 - Battlefield capacity is unrestricted.
 
 **Combat:**
+
 - Only ready units can attack.
 - Attackers become exhausted.
 - Defenders do not become exhausted.
@@ -1400,6 +1408,7 @@ The implementation should prioritize readable, deterministic tests over elaborat
 - Enemy units do not restrict stronghold targeting.
 
 **Deck exhaustion:**
+
 - Drawing from a deck with one remaining card works.
 - Each missing draw causes 3 stronghold damage.
 - Empty decks do not automatically cause defeat.
@@ -1407,6 +1416,7 @@ The implementation should prioritize readable, deterministic tests over elaborat
 - Simultaneous lethal exhaustion produces a draw.
 
 **Victory:**
+
 - Stronghold destruction ends the game.
 - The surviving player wins.
 - No actions are permitted after game completion.
@@ -1529,7 +1539,7 @@ Milestone 1A is complete when all of the following are true.
 
 The existing repository's verification commands remain authoritative. Relevant checks should include the equivalent of:
 
-~~~bash
+```bash
 cargo test --locked -p low-kingdoms-rules
 
 cargo clippy --locked \
@@ -1542,7 +1552,7 @@ cargo check --locked \
   --target wasm32-unknown-unknown
 
 just check
-~~~
+```
 
 The new crate must be incorporated into the maintained repository verification workflow. Do not create a parallel CI system when the existing one can be extended.
 
@@ -1706,7 +1716,7 @@ Once 1A is complete, Milestone 1B should integrate the rules crate with the exis
 
 The client will be responsible for rendering the game, collecting player input, and presenting events. The rules engine will remain responsible for legality, state transitions, combat, and victory.
 
-~~~text
+```text
                   Bevy Client
                       |
                       | Player command
@@ -1724,7 +1734,7 @@ The client will be responsible for rendering the game, collecting player input, 
                       |
                       v
                Render game UI
-~~~
+```
 
 The Bevy client must not duplicate gameplay rules. The rules crate must not know that Bevy exists.
 
