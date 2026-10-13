@@ -800,14 +800,22 @@ if (routes.length) {
       let submitted;
       if (!exercised.pass && exercised.deployed && legal.includes("Pass")) {
         submitted = "Pass";
-        await activate(page, "hand", touch);
-        await waitForPanel(page, "Hand");
-        // The bottom hand tray must leave the battle footer usable. A quick
-        // click/tap also exercises same-frame input without a held press.
-        expect(
-          visible(controlFor(await bridge(page), "pass"), page.viewportSize()),
-        ).toBe(true);
-        await capture(page, testInfo, "hand-tray-before-pass");
+        if (touch) {
+          await activate(page, "hand", touch);
+          await waitForPanel(page, "Hand");
+          // Compact mobile's bottom hand tray leaves the persistent footer
+          // usable. The separate desktop Hand inspector is a modal overlay.
+          await expect
+            .poll(async () =>
+              visible(
+                controlFor(await bridge(page), "pass"),
+                page.viewportSize(),
+              ),
+            )
+            .toBe(true);
+          await capture(page, testInfo, "hand-tray-before-pass");
+        }
+        // Quick click/tap verifies same-frame input without a held press.
         await activate(page, "pass", touch, true);
         exercised.pass = true;
       } else if (
