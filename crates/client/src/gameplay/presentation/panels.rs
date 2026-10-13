@@ -317,7 +317,7 @@ fn inspect(world: &mut World, parent: Entity, battle: &Battle) {
         world,
         parent,
         format!(
-            "Cost {}\nPower {} · Maximum Health {}",
+            "Cost {}\nPower {} | Maximum Health {}",
             definition.cost, definition.power, definition.health
         ),
         18.0,
@@ -329,7 +329,7 @@ fn inspect(world: &mut World, parent: Entity, battle: &Battle) {
             world,
             parent,
             format!(
-                "Remaining Health {health} · Damage {}\n{}",
+                "Remaining Health {health} | Damage {}\n{}",
                 unit.damage,
                 if unit.ready { "Ready" } else { "Exhausted" }
             ),
@@ -410,7 +410,7 @@ fn card_row(world: &mut World, parent: Entity, card: Card, battle: &Battle, capt
     };
     let selected = battle.resource_selection.contains(&card.id);
     let value = format!(
-        "{} · Cost {} · {} / {}\n{}",
+        "{} | Cost {} | {} / {}\n{}",
         definition.name,
         definition.cost,
         definition.power,

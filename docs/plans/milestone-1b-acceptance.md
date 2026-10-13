@@ -200,3 +200,9 @@ blocked checks instead of treating an intended exclusion as an incomplete requir
 - `just build-web`: passed (62,316,103 WASM bytes before any final presentation refinements).
 - `just check` and `just smoke-native`: locally blocked by missing pkg-config/Wayland development prerequisites. No host or native render pass is claimed.
 - Local Chromium installation failed on an invalid CDN download. The separate cloud browser could not connect to the workspace loopback server, so manual interactive local review is blocked. CI render artifacts still need execution and visual inspection.
+
+### First CI correction
+
+PR run `38354248534` rendered title and mulligan with llvmpipe/Mesa Vulkan but the battle fixture timed out at a saved human mulligan decision. Xvfb alone provided no window manager/focus, so the production AI correctly stayed paused. The native render job now starts Openbox inside Xvfb rather than bypassing the inactive-window policy. Inspection also found unsupported middle-dot glyphs in the embedded font; UI separators now use ASCII pipes. These are presentation/test-environment corrections, with no 1A rule changes.
+
+The startup schedule inspection also found that initial state entry precedes Startup save loading. Title now reconciles its Resume control when availability changes, with a production-plugin regression that requires the actual rendered control rather than sending a resume message directly.

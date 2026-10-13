@@ -177,3 +177,30 @@ fn text(value: impl Into<String>, role: TextRole) -> impl Bundle {
         Name::new(format!("{role:?} text")),
     )
 }
+
+#[expect(
+    clippy::redundant_pub_crate,
+    reason = "The private presentation reconciler updates title controls after local-save initialization."
+)]
+pub(crate) fn reconcile_title_resume(world: &mut World, available: bool) {
+    let existing = world
+        .query::<(Entity, &Control)>()
+        .iter(world)
+        .find_map(|(entity, control)| (*control == Control::Resume).then_some(entity));
+    match (available, existing) {
+        (false, Some(entity)) => {
+            world.despawn(entity);
+        }
+        (true, None) => {
+            let panel = world
+                .query_filtered::<Entity, With<ScreenPanel>>()
+                .iter(world)
+                .next();
+            if let Some(panel) = panel {
+                let resume = world.spawn(crate::ui::control(Control::Resume, 1)).id();
+                world.entity_mut(panel).insert_children(4, &[resume]);
+            }
+        }
+        _ => {}
+    }
+}

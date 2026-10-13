@@ -192,6 +192,13 @@ fn resume_fixture(seed: u64, human_decision: Option<Command>, pace: Speed) -> (A
     );
     let mut app = application(store.clone());
     assert!(app.world().resource::<Battle>().resume_available);
+    assert!(
+        app.world_mut()
+            .query::<&Control>()
+            .iter(app.world())
+            .any(|control| *control == Control::Resume),
+        "a loaded battle must have a visible Resume control"
+    );
     activate(&mut app, Control::Resume);
     (app, store)
 }

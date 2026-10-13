@@ -174,7 +174,7 @@ fn battlefield(world: &mut World, presentation: &mut Presentation, root: Entity,
         text(
             world,
             board,
-            "Your hand · scroll for more cards",
+            "Your hand | scroll for more cards",
             13.0,
             theme::SECONDARY,
         );
@@ -256,11 +256,11 @@ fn lane(
         world,
         lane,
         if show_hand {
-            "Select cards to resource · scroll for more"
+            "Select cards to resource | scroll for more"
         } else if own {
-            "Your units · scroll for more"
+            "Your units | scroll for more"
         } else {
-            "Opponent units · scroll for more"
+            "Opponent units | scroll for more"
         },
         12.0,
         theme::SECONDARY,

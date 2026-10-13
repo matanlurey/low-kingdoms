@@ -135,7 +135,7 @@ capture ceiling. Unsuccessful capture or an unavailable required adapter is a no
 Default evidence is `evidence/native/{title,mulligan,battle,results}.png` with matching scene logs. The test-support fixture submits production controls and legal commands, isolates its save slots, and freezes AI scheduling only after reaching each capture scene. Inspect all four images for readable cards, strongholds, controls, clipped text, and a nonblank rendered screen. A delay
 or startup log alone is insufficient.
 
-The configured Linux CI virtual-display/software-GPU path runs functional rendering checks;
+The configured Linux CI virtual-display/software-GPU path runs Openbox inside Xvfb so the native window receives real focus and the inactive-window AI policy remains exercised. This path runs functional rendering checks;
 executed evidence is recorded separately from the configuration. It is not a performance
 measurement or a physical device certification. On an interactive desktop, also
 exercise About/Back, resize, minimize/restore, normal window close, and native Quit; record the OS

@@ -130,7 +130,7 @@ fn update(
     let value = unit.map_or_else(
         || {
             format!(
-                "{}\nCost {} · {} / {}\n{}",
+                "{}\nCost {} | {} / {}\n{}",
                 definition.name,
                 definition.cost,
                 definition.power,
@@ -145,7 +145,7 @@ fn update(
         |unit| {
             let health = u64::from(unit.health).saturating_sub(unit.damage);
             format!(
-                "{} · Cost {}\n{} / {health}\nDamage: {}\n{}",
+                "{} | Cost {}\n{} / {health}\nDamage: {}\n{}",
                 definition.name,
                 definition.cost,
                 unit.power,

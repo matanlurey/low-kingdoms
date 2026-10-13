@@ -81,6 +81,17 @@ jobs:
           key: wasm32-production-test-support
       - run: cargo xtask setup
       - run: npm exec --prefix tools/web-tests -- playwright install-deps chromium
+      # Temporary verification transfer; remove once local interactive review completes.
+      - name: Record official pinned Chromium runtime provenance
+        run: |
+          ~/.cache/ms-playwright/chromium_headless_shell-1243/chrome-headless-shell-linux64/chrome-headless-shell --version
+          sha256sum ~/.cache/ms-playwright/chromium_headless_shell-1243/chrome-headless-shell-linux64/chrome-headless-shell
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: verification-chromium-runtime-1243
+          path: ~/.cache/ms-playwright/chromium_headless_shell-1243/
+          if-no-files-found: error
+          retention-days: 1
       - run: cargo xtask smoke-web --timeout 900
       - name: Upload verified production site
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
@@ -140,13 +151,17 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - run: sudo apt-get update && sudo apt-get install -y xvfb xauth mesa-vulkan-drivers libgl1-mesa-dri libxkbcommon-dev libxkbcommon-x11-0 libwayland-dev libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev
+      - run: sudo apt-get update && sudo apt-get install -y xvfb xauth openbox mesa-vulkan-drivers libgl1-mesa-dri libxkbcommon-dev libxkbcommon-x11-0 libwayland-dev libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           shared-key: native-ubuntu-24.04
           key: production-test-support
       - name: Render with Xvfb and Mesa software Vulkan
-        run: xvfb-run -a cargo xtask smoke-native --timeout 120
+        run: |
+          xvfb-run -a sh -c '
+            openbox > /tmp/low-kingdoms-window-manager.log 2>&1 &
+            cargo xtask smoke-native --timeout 120
+          '
         env:
           WGPU_BACKEND: vulkan
           LIBGL_ALWAYS_SOFTWARE: "1"

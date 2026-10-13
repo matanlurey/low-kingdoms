@@ -223,6 +223,9 @@ fn synchronize_changed(
 ) {
     world.resource_scope(|world, battle: Mut<Battle>| {
         if matches!(screen, Screen::Title | Screen::About) {
+            if screen == Screen::Title {
+                crate::screens::reconcile_title_resume(world, battle.resume_available);
+            }
             let root = world
                 .query_filtered::<Entity, With<ScreenRoot>>()
                 .iter(world)
@@ -279,7 +282,7 @@ fn reconcile_labels(world: &mut World, presentation: &Presentation, battle: &Bat
         presentation,
         Label::Status,
         format!(
-            "{status}\nRound {} · Initiative: {initiative} · AI {:?}",
+            "{status}\nRound {} | Initiative: {initiative} | AI {:?}",
             view.round, battle.speed
         ),
     );
@@ -350,7 +353,7 @@ fn player_info(view: &PlayerView, own: bool) -> String {
         "Opponent stronghold"
     };
     format!(
-        "{name}: {health} HP\nResources: {}/{} ready · Deck: {} · Hand: {}",
+        "{name}: {health} HP\nResources: {}/{} ready | Deck: {} | Hand: {}",
         player.resources.ready, player.resources.total, player.deck_size, player.hand_size
     )
 }
