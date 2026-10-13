@@ -53,6 +53,41 @@ struct Options {
     port: u16,
     output: Option<PathBuf>,
     timeout: Option<Duration>,
+    project: Option<BrowserProject>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum BrowserProject {
+    Desktop720,
+    Desktop800,
+    PhonePortrait,
+    PhoneMinimum,
+    PhoneLandscapeDpr2,
+}
+
+impl BrowserProject {
+    fn parse(value: &str) -> Result<Self> {
+        match value {
+            "desktop-720" => Ok(Self::Desktop720),
+            "desktop-800" => Ok(Self::Desktop800),
+            "phone-portrait" => Ok(Self::PhonePortrait),
+            "phone-minimum" => Ok(Self::PhoneMinimum),
+            "phone-landscape-dpr2" => Ok(Self::PhoneLandscapeDpr2),
+            _ => Err(Failure::new(format!(
+                "Unknown browser project {value}; choose desktop-720, desktop-800, phone-portrait, phone-minimum, or phone-landscape-dpr2"
+            ))),
+        }
+    }
+
+    const fn name(self) -> &'static str {
+        match self {
+            Self::Desktop720 => "desktop-720",
+            Self::Desktop800 => "desktop-800",
+            Self::PhonePortrait => "phone-portrait",
+            Self::PhoneMinimum => "phone-minimum",
+            Self::PhoneLandscapeDpr2 => "phone-landscape-dpr2",
+        }
+    }
 }
 
 impl Options {
@@ -64,6 +99,7 @@ impl Options {
             port: 4173,
             output: None,
             timeout: None,
+            project: None,
         };
         while let Some(argument) = args.next() {
             let value = args
@@ -88,8 +124,16 @@ impl Options {
                     }
                     options.timeout = Some(Duration::from_secs(seconds));
                 }
+                "--project" => options.project = Some(BrowserProject::parse(&value)?),
                 _ => return Err(Failure::new(format!("Unknown option {argument}"))),
             }
+        }
+        if options.project.is_some()
+            && !matches!(options.command.as_str(), "smoke-web" | "smoke-web-prebuilt")
+        {
+            return Err(Failure::new(
+                "--project is supported only by smoke-web and smoke-web-prebuilt",
+            ));
         }
         Ok(options)
     }
@@ -111,7 +155,7 @@ fn execute() -> Result<()> {
     match options.command.as_str() {
         "help" | "--help" | "-h" => {
             println!(
-                "cargo xtask <doctor|setup|dev|dev-web|build|build-web|fmt|fmt-check|clippy|test|doc|check|check-web|smoke-native|smoke-web|check-all|structure> [--port N] [--output PATH] [--timeout SECONDS]"
+                "cargo xtask <doctor|setup|dev|dev-web|build|build-web|build-web-support|fmt|fmt-check|clippy|test|doc|check|check-web|smoke-native|smoke-web|smoke-web-prebuilt|check-all|structure> [--port N] [--output PATH] [--timeout SECONDS] [--project PROJECT]"
             );
             Ok(())
         }
@@ -129,6 +173,11 @@ fn execute() -> Result<()> {
             &project.output(options.output.as_deref(), "dist/web"),
             false,
         ),
+        "build-web-support" => web::build(
+            &project,
+            &project.output(options.output.as_deref(), "dist/web-test"),
+            true,
+        ),
         "fmt" => formatting(&project, false),
         "fmt-check" => formatting(&project, true),
         "clippy" => clippy(&project),
@@ -139,6 +188,7 @@ fn execute() -> Result<()> {
         "check-web" => check_web(&project),
         "smoke-native" => smoke_native(&project, &options),
         "smoke-web" => web::smoke(&project, &options),
+        "smoke-web-prebuilt" => web::smoke_prebuilt(&project, &options),
         "check-all" => {
             check(&project)?;
             check_web(&project)?;
@@ -162,6 +212,7 @@ impl Options {
             port: self.port,
             output: self.output.clone(),
             timeout: self.timeout,
+            project: self.project,
         }
     }
 }
@@ -669,5 +720,38 @@ mod tests {
         let status = ExitStatus::from_raw(0);
         let failure = Failure::status("Required server exited before readiness".to_owned(), status);
         assert_eq!(failure.code, 1);
+    }
+
+    #[test]
+    fn browser_project_selection_accepts_each_configured_project() {
+        for project in [
+            BrowserProject::Desktop720,
+            BrowserProject::Desktop800,
+            BrowserProject::PhonePortrait,
+            BrowserProject::PhoneMinimum,
+            BrowserProject::PhoneLandscapeDpr2,
+        ] {
+            for command in ["smoke-web", "smoke-web-prebuilt"] {
+                let options =
+                    Options::parse([command, "--project", project.name()].map(str::to_owned))
+                        .unwrap();
+                assert_eq!(options.project, Some(project));
+            }
+        }
+        let full = Options::parse(["smoke-web".to_owned()]).unwrap();
+        assert_eq!(full.project, None);
+        assert_eq!(full.clone_for("smoke-web-prebuilt").project, None);
+    }
+
+    #[test]
+    fn browser_project_selection_rejects_unknown_missing_and_unrelated_commands() {
+        for args in [
+            vec!["smoke-web", "--project", "unknown"],
+            vec!["smoke-web", "--project"],
+            vec!["build-web", "--project", "desktop-720"],
+            vec!["check-all", "--project", "desktop-720"],
+        ] {
+            assert!(Options::parse(args.into_iter().map(str::to_owned)).is_err());
+        }
     }
 }

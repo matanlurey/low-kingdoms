@@ -122,6 +122,13 @@ buffered AI draft preservation, startup Resume reconciliation, safe failed-save 
 pending-AI refresh, replacement confirmation/corrupt saves, read failure recovery, and terminal
 cleanup fallback. Presentation tests pin damage/readiness text, stable entities/scroll after combat,
 actual legal targets, resize/orientation ownership, missing-entity reconciliation, and log scroll.
+`src/gameplay/tests/panel_input.rs` exercises a held Main Menu touch across a private AI resource
+decision and gives pending navigation priority over an AI action due in the same update.
+The presentation tests keep More controls stable while refreshing their eligibility and speed,
+and switch hand captions from resource selection to inspection after the human submits a decision.
+These use production reconciliation, input, and scheduling paths. The browser driver in
+`tools/web-tests/driver.mjs` also holds a real touch across the private revision before release;
+its rendered result must be recorded separately from the headless regressions.
 
 The browser battle suite uses actual compiled WASM with real mouse/touch input. Required scenarios
 start from Title, keep/mulligan, confirm resources, deploy, observe the opponent, regroup, attack
@@ -161,18 +168,64 @@ inherit that desktop window constraint.
 
 ## Browser smoke
 
-`just smoke-web` builds/serves actual generated bundles and runs pinned Chromium/Playwright tests.
+`just smoke-web` builds/serves actual generated bundles and runs all 55 pinned Chromium/Playwright
+cases. It remains the default complete local check.
 Playwright 1.63.0 selects Chromium **153.0.8010.12**, browser revision **1243**, for this baseline.
 Installed browser availability does not by itself establish successful WASM rendering.
 Default evidence is `evidence/web/`, including server logs, captures, browser diagnostics, and
 retained traces. The orchestration timeout defaults to **4200 seconds** for all 55 cases in the
 viewport matrix on software renderers. Ordinary tests have 120-second deadlines and complete
-matches 600 seconds, except `phone-landscape-dpr2` at 1200 seconds. Expect waits remain 60 seconds,
-CI's browser job 90 minutes, and retries zero. The correction follows an actual overall-budget
-failure after successful Results/restart: its last screen poll was interrupted only 925.5 ms into
-its normal allowance. All cases/assertions remain; corrected-budget full CI must execute before
-closure. Required resource failures, unexpected errors, readiness timeout, or unavailable required
-browser/renderer fail rather than skip.
+matches 600 seconds, except `phone-landscape-dpr2` at 1200 seconds. Expect waits remain 60 seconds
+and retries zero. Required resource failures, unexpected errors, readiness timeout, or unavailable
+required browser/renderer fail rather than skip.
+
+CI builds both configurations once in `web-build` and uploads `dist/web/` plus `dist/web-test/` as
+the `web-bundles` artifact. Five isolated jobs download it and run one project each through
+`cargo xtask smoke-web-prebuilt --project NAME`, with the existing full Chromium executable,
+one worker, zero retries, and all eleven existing cases per project. This preserves actual tab
+background behavior while avoiding multiple active viewport tests on one renderer. Each job keeps
+its own report, captures, traces, and browser diagnostics. No browser job compiles or repackages
+the game. To repeat a single project locally:
+
+```sh
+cargo xtask build-web
+cargo xtask build-web-support
+cargo xtask smoke-web-prebuilt --project phone-minimum --output evidence/web-phone-minimum
+```
+
+`smoke-web-prebuilt` requires existing production and support outputs at `dist/web/` and
+`dist/web-test/`, each with its generated ownership marker, exact build-mode marker, and required
+host, JavaScript, and WASM files. Preserve hidden `pkg/.xtask-generated` and
+`pkg/.xtask-build-mode` files in the artifact. Without `--project` it runs all 55 cases.
+The allowed project names are
+`desktop-720`, `desktop-800`, `phone-portrait`, `phone-minimum`, and `phone-landscape-dpr2`;
+unknown names fail. Its root and project-subpath copies come from the same support output; the
+production route uses the production output and must have no diagnostic bridge.
+
+The final `browser` gate checks the complete reports against `dist/browser-inventory.json`, which
+`web-build` discovers with Playwright's `--list --reporter=json` at the same source commit.
+It requires exactly eleven expected cases per project and 55 unique project/spec-ID pairs overall,
+each with exactly one passed attempt and one empty diagnostic attachment. Missing or duplicate
+cases, skips, failures, flaky results, retries, and unexpected diagnostics fail the gate. A green
+shard alone cannot pass the matrix. To repeat report validation with the five downloaded
+`browser-evidence-${project}` directories under `evidence/sharded/`:
+
+```sh
+node tools/web-tests/verify-reports.mjs dist/browser-inventory.json evidence/sharded evidence/web-summary.json
+npm run --prefix tools/web-tests test-reports
+```
+
+The first command writes the aggregate summary after verifying the actual reports and diagnostics.
+The second runs the report verifier's Node tests; it does not execute browser gameplay.
+The final `browser-evidence` artifact retains the combined captures and summary for fourteen days.
+Only after aggregation may CI upload the exact production directory
+from the original `web-bundles` artifact for Pages. Rebuilding after the browser tests would break
+that evidence chain. Native, quality, WASM, and native-render checks remain required independently.
+
+The earlier serial matrix measured about 48 minutes of browser execution, with its longest
+viewport about 18.5 minutes. Parallel viewport jobs target that longest duration for browser tests,
+excluding build/setup/transfer/queue time. Do not report this estimate as measured new CI timing;
+record each actual run and the complete combined results before claiming an improvement.
 
 The maintained suite selects the supported `channel: "chromium"` full Chromium executable.
 This matters for the five real background-tab scenarios: the fixture disables Playwright's focus

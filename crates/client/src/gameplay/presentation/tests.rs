@@ -275,6 +275,62 @@ fn same_panel_reconciliation_preserves_overlay_scroll() {
 }
 
 #[test]
+fn battle_menu_controls_survive_public_actions_and_refresh_claim_eligibility() {
+    let (mut app, mut game) = fixture();
+    app.world_mut().resource_mut::<Battle>().panel = crate::gameplay::Panel::More;
+    app.update();
+    let controls = |app: &mut App| {
+        let mut controls = app
+            .world_mut()
+            .query::<(Entity, &Control)>()
+            .iter(app.world())
+            .filter(|(_, control)| {
+                matches!(
+                    control,
+                    Control::MainMenu | Control::ClaimInitiative | Control::Close
+                )
+            })
+            .map(|(entity, control)| (*control, entity))
+            .collect::<Vec<_>>();
+        controls.sort_unstable_by_key(|(_, entity)| entity.to_bits());
+        controls
+    };
+    let original = controls(&mut app);
+    let claim = original
+        .iter()
+        .find_map(|(control, entity)| (*control == Control::ClaimInitiative).then_some(*entity))
+        .expect("claim control");
+    assert!(app.world().get::<DisabledControl>(claim).is_none());
+    apply(&mut app, &mut game, PlayerId::Zero, &Command::Pass);
+    assert_eq!(controls(&mut app), original);
+    assert!(app.world().get::<DisabledControl>(claim).is_some());
+    let card = game.view_for(PlayerId::One).hand[0].id;
+    apply(
+        &mut app,
+        &mut game,
+        PlayerId::One,
+        &Command::PlayUnit { card },
+    );
+    assert_eq!(controls(&mut app), original);
+    assert!(app.world().get::<DisabledControl>(claim).is_none());
+    app.world_mut().resource_mut::<Battle>().speed = crate::gameplay::Speed::Fast;
+    app.update();
+    assert_eq!(controls(&mut app), original);
+    assert!(
+        app.world_mut()
+            .query::<&Text>()
+            .iter(app.world())
+            .any(|text| text.0 == "AI speed: Fast")
+    );
+    assert!(
+        app.world_mut()
+            .query::<&Text>()
+            .iter(app.world())
+            .any(|text| text.0 == "Claiming initiative ends your actions this round.")
+    );
+}
+
+#[test]
 fn opening_hand_inspection_has_correct_stats_without_a_play_control_or_wrong_zone() {
     let (mut app, _) = fixture();
     let content = Content::load().expect("embedded content");

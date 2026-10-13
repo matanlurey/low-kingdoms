@@ -35,6 +35,8 @@ use crate::{
     ui::Control,
 };
 
+mod panel_input;
+
 #[derive(Default)]
 struct Slot {
     data: Option<String>,

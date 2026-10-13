@@ -109,10 +109,12 @@ cargo xtask build-web --output dist/custom-web
 cargo xtask smoke-native --timeout 90
 ```
 
-The shared syntax is `cargo xtask COMMAND [--port N] [--output PATH] [--timeout SECONDS]`.
+The shared syntax is
+`cargo xtask COMMAND [--port N] [--output PATH] [--timeout SECONDS] [--project NAME]`.
 Only commands for which an option is relevant use that option. Defaults and argument validation
 live in the tool; subprocess failure propagates rather than producing a successful-looking report.
 The same overrides work through Just, for example `just dev-web --port 4200`.
+Only `smoke-web` and `smoke-web-prebuilt` accept `--project`; omitting it retains the full matrix.
 For `check-all --output PATH`, native and browser evidence go into `PATH/native/` and `PATH/web/`.
 
 Native smoke captures four scenes through `test-support`: Title, Mulligan, an actually deployed
@@ -157,12 +159,31 @@ multi-tab focus/visibility checks. Setup installs the pinned browser; a working 
 not a substitute for the full-channel background scenarios. If local process/UNIX-socket policy
 blocks Chromium's ProcessSingleton, record the full smoke as blocked and verify on a provisioned
 runner. Do not disable the background policy or replace actual tab activity with a mocked field.
-The full 55-case smoke is bounded to 4200 seconds (browser CI job 90 minutes). Complete matches
-allow 600 seconds, with only `phone-landscape-dpr2` allowed 1200 seconds. The same-source push
-passed all 55, but its separate PR exhausted the previous scenario budget after a valid full match
-and fresh restart, interrupting the final normal 60-second screen poll after only 925.5 ms. The
-bounded timing correction preserves every assertion and zero retries. Ordinary cases remain
-120 seconds and expect waits 60 seconds; no product rule or game source changes for this recovery.
+The full 55-case smoke is bounded to 4200 seconds. Complete matches allow 600 seconds, with only
+`phone-landscape-dpr2` allowed 1200 seconds. Ordinary cases remain 120 seconds and expect waits
+60 seconds, with zero retries. CI runs the same cases in five isolated viewport jobs; this changes
+orchestration, not assertions, browser behavior, or game rules. See [browser smoke](testing.md#browser-smoke)
+for report completeness and artifact reuse requirements.
+
+For a focused browser check, build both configurations, then reuse them without rebuilding:
+
+```sh
+cargo xtask build-web
+cargo xtask build-web-support
+cargo xtask smoke-web-prebuilt --project phone-minimum --output evidence/web-phone-minimum
+```
+
+The production output is `dist/web/`; the support output is `dist/web-test/` and includes only the
+read-only diagnostics needed by the existing tests. `smoke-web-prebuilt` serves these two directories
+with the same root/subpath/production routes as `smoke-web`. It does not compile Rust or regenerate
+bindings. It requires the generated-package marker, exact production/support build-mode marker,
+and required host, JavaScript, and WASM files before starting the server. Preserve the hidden
+`pkg/.xtask-generated` and `pkg/.xtask-build-mode` files when transferring a bundle artifact.
+Its `--output` selects evidence, not a bundle directory. A single project runs eleven
+cases; omit `--project` to run all 55. Valid projects are `desktop-720`, `desktop-800`,
+`phone-portrait`, `phone-minimum`, and `phone-landscape-dpr2`; other names fail instead of selecting
+zero tests. Build both outputs from the same source and lockfile before using this path. Normal
+`just smoke-web` remains the complete build-and-test command.
 
 Headless battle tests cover content, view-only AI, complete simulations, and exact saved continuation.
 Client tests use production command/scheduling/presentation paths. Browser tests use real compiled
@@ -257,6 +278,10 @@ and pauses the affected path rather than silently continuing to overwrite progre
 | `just smoke-web`    | Generated bundles, real Chromium input, screenshots, and traces.          |
 | `just check-all`    | All mandatory gates, including native/browser rendering.                  |
 
+`cargo xtask build-web-support` packages `dist/web-test/` with test support.
+`cargo xtask smoke-web-prebuilt [--project NAME]` tests existing production and support outputs;
+it is the CI artifact-consumer path and does not replace `just smoke-web` for a fresh local build.
+
 ## Files, assets, and rendering features
 
 `dist/`, `target/`, `.tools/`, `node_modules/`, and `evidence/` are generated/ignored. Commit Cargo
@@ -297,15 +322,37 @@ keep build outcomes and bundle-size measurements separate from this configuratio
 
 ## GitHub Pages
 
-The repository owner authorized automatic browser deployment. `.github/workflows/ci.yml` publishes
-on pushes to `main`, including merged pull requests, or a manual workflow run targeting `main`.
-Pull-request runs only verify. Main runs are serialized so a new commit does not interrupt an
-active deployment; pull-request verification can replace stale runs.
+The repository owner authorized automatic browser deployment. `.github/workflows/ci.yml` verifies
+pushes to `main`, pull requests, and manual runs. It publishes only a push or manual run targeting
+`main`; pull-request runs only verify. Limiting push verification to `main` avoids running the same
+feature-branch commit for both its push and pull request. Main runs are serialized so a new commit
+does not interrupt an active deployment; pull-request verification can replace stale runs.
 
-The browser job builds and tests production plus support bundles, then uploads only `dist/web`
-with the pinned `actions/upload-pages-artifact` action. The deployment job waits for the native
-Linux/macOS/Windows matrix, quality, WASM, browser, and native renderer checks. A failed gate blocks
-publication. It uses `github-pages`, `actions/configure-pages`, and `actions/deploy-pages`, with
+The `web-build` job produces production `dist/web/` and support `dist/web-test/` once and uploads
+both, including their hidden package markers, as `web-bundles`. This artifact also contains
+`dist/browser-inventory.json`, discovered from the same commit with Playwright's `--list --reporter=json`.
+Five isolated `browser-viewport` jobs download it and use `smoke-web-prebuilt` to run one project
+each, uploading `browser-evidence-${project}`. The retained `browser` job waits for `web-build`
+and those five jobs, verifies all 55 results against the inventory, and rejects missing, duplicate,
+skipped, flaky, failed, retried, or unexpected-error results. It uploads the combined captures
+and `web-summary.json` as `browser-evidence` for fourteen days; intermediate bundles and viewport
+artifacts are retained for two days.
+
+That same final gate downloads the original bundle artifact and uploads only its already tested
+`dist/web/` with
+the pinned `actions/upload-pages-artifact` action. Neither the browser jobs nor the final gate
+rebuilds the game, and the test-support bundle is never published.
+
+The previous serial matrix measured about 48 minutes of browser execution; its longest viewport
+measured about 18.5 minutes. Five isolated jobs target that longest viewport duration for the test
+portion, excluding build, setup, artifact transfer, and queue time. This is an estimate from prior
+measurements, not a measured result for the new workflow.
+
+The deployment job waits for the native Linux/macOS/Windows matrix, quality, WASM, native renderer,
+and final browser gate. A failed prerequisite skips publication; it does not mean the Pages
+deployment action ran and failed. Inspect those jobs before changing Pages configuration. A passed
+artifact upload alone is also insufficient. The deployment uses `github-pages`,
+`actions/configure-pages`, and `actions/deploy-pages`, with
 `pages: write` and `id-token: write` scoped to that job. No personal token, deployment secret, or
 generated-assets branch is needed. The downloaded game requires no GitHub credentials.
 

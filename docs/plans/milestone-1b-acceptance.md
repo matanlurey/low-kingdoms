@@ -385,3 +385,54 @@ Both actual full Chromium suites passed 55/55, including all five genuine backgr
 The 1200/4200-second bounds resolved the trace-proven scenario-budget failure without changing
 product source, adding retries, removing cases/assertions, or weakening gameplay behavior checks.
 T15/T16 and milestone closure are complete at the verified implementation checkpoint.
+
+## Post-merge CI and input follow-up (2026-10-13)
+
+This follow-up preserves the original 76-criterion mapping and verified checkpoint above.
+**Follow-up status: pending new rendered CI and published-site verification.**
+
+After PR #3 merged as `dde4c886049f53160cd477e4964fb6e59b84e020`, main
+[run 38407319540](https://github.com/matanlurey/low-kingdoms/actions/runs/38407319540) attempt 1
+failed six prerequisite jobs before their maintained checks executed; native rendering passed.
+The cause of those early failures is unconfirmed because usable failure logs were unavailable.
+A targeted rerun recovered all six non-browser gates, then the actual Chromium suite ended
+34 passed, one failed, and 20 not run. Pages was skipped because verification failed; no new
+deployment is claimed.
+
+The failure was minimum-phone subpath Main Menu navigation: a touch began at revision 2,
+then a private buffered AI resource decision advanced revision 3 without changing the human view.
+Panel reconciliation replaced the held control entity, so releasing the touch could not activate it.
+The verified browser evidence is
+[artifact 11824377147](https://github.com/matanlurey/low-kingdoms/actions/runs/38407319540/artifacts/11824377147),
+23,476,307 bytes, ZIP SHA-256
+`03663a4296b9f9ffc01f8abe0f293b9f1e81aa312f3abb610b23214ed88e8961`.
+
+The correction in `crates/client/src/gameplay/presentation/panels.rs` derives panel refreshes from
+human-visible inputs and updates stable More controls in place. `crates/client/src/gameplay/mod.rs`
+gives pending navigation priority over an AI action in the same update. New production regressions
+in `crates/client/src/gameplay/tests/panel_input.rs` cover held-touch entity identity and navigation
+priority; `crates/client/src/gameplay/presentation/tests.rs` covers hand captions after submission
+and strengthens stable-control eligibility/speed checks. `tools/web-tests/driver.mjs` and
+`tests/battle.spec.mjs` add the held real-touch path within the existing browser cases.
+No rules, hidden-information boundary, or AI choice changed.
+
+CI now builds both web configurations once, shares `web-bundles` with five isolated viewport jobs,
+and retains the `browser` gate to verify all 55 inventory-matched results before reusing the exact
+tested production bundle for Pages. Each viewport still runs eleven cases with one worker and
+zero retries. The earlier serial test stage measured about 48 minutes; the longest viewport was
+about 18.5 minutes. That is the expected parallel test-stage target, excluding build/setup/transfer/
+queue time, not a measured result for the new workflow.
+
+| Follow-up check                                  | Actual result | Evidence or limitation                                                                                             |
+| ------------------------------------------------ | ------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Main attempt 1                                   | Failed        | Six early prerequisite failures; cause unconfirmed.                                                                |
+| Main targeted attempt 2, non-browser gates       | Passed        | All six native/quality/WASM/rendering gates recovered.                                                             |
+| Main targeted attempt 2, full Chromium           | Failed        | 34 passed, one minimum-subpath Main Menu failure, 20 not run; artifact above.                                      |
+| Corrected client source in native harness        | Passed        | 46 default and 50 test-support tests; unmodified production source, including the three new regressions.           |
+| Strict native harness and maintained WASM Clippy | Passed        | Warnings denied for both checks.                                                                                   |
+| Fresh-target `just check-web`                    | Passed        | All four production/test-support compile/lint gates.                                                               |
+| Direct local `just check`                        | Blocked       | Missing host `pkg-config`/native development prerequisites. Harness results do not replace this command.           |
+| Report aggregator                                | Passed        | Seven Node tests and integration against independently verified prior 55-case reports plus the matching inventory. |
+| New held-touch rendered regression               | Pending       | Requires the new compiled browser bundle and real input.                                                           |
+| New five-viewport CI and aggregate gate          | Pending       | No new CI result or elapsed-time improvement is claimed.                                                           |
+| Pages publication and public browser checks      | Pending       | Must follow every required gate and inspect the returned URL/captures; no new deployment is claimed.               |
