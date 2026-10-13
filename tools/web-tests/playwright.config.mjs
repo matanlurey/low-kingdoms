@@ -50,6 +50,7 @@ export default defineConfig({
   ],
   use: {
     browserName: "chromium",
+    channel: "chromium",
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
     launchOptions: {

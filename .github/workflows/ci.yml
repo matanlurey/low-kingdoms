@@ -81,15 +81,15 @@ jobs:
           key: wasm32-production-test-support
       - run: cargo xtask setup
       - run: npm exec --prefix tools/web-tests -- playwright install-deps chromium
-      # Temporary verification transfer; remove once local interactive review completes.
-      - name: Record official pinned Chromium runtime provenance
+      # Temporary: compare actual tab visibility in Chromium's newer headless mode.
+      - name: Record pinned Chromium runtime provenance
         run: |
-          ~/.cache/ms-playwright/chromium_headless_shell-1243/chrome-headless-shell-linux64/chrome-headless-shell --version
-          sha256sum ~/.cache/ms-playwright/chromium_headless_shell-1243/chrome-headless-shell-linux64/chrome-headless-shell
+          ~/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome --version
+          sha256sum ~/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: verification-chromium-runtime-1243
-          path: ~/.cache/ms-playwright/chromium_headless_shell-1243/
+          name: verification-chromium-runtime-full-1243
+          path: ~/.cache/ms-playwright/chromium-1243/
           if-no-files-found: error
           retention-days: 1
       - run: cargo xtask smoke-web --timeout 900

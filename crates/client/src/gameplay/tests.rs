@@ -14,7 +14,7 @@ use bevy::{
 use low_kingdoms_battle::{ai, content::Content, session::Session};
 use low_kingdoms_rules::{
     command::{AttackTarget, Command},
-    model::{CardId, Phase, PlayerId},
+    model::{CardId, Outcome, Phase, PlayerId},
 };
 
 use super::{Activate, Battle, LocalSave, Panel, Runtime, Speed};
@@ -35,7 +35,7 @@ struct Slot {
     writes: usize,
     clears: usize,
     fail_read: bool,
-    fail_write: bool,
+    write_failure: Option<StorageError>,
     fail_clear: bool,
 }
 
@@ -55,8 +55,8 @@ impl Store for MemoryStore {
     fn write(&mut self, data: &str) -> Result<(), StorageError> {
         let mut slot = self.0.lock().expect("test storage lock");
         slot.writes += 1;
-        if slot.fail_write {
-            return Err(StorageError::Write("test write failure".to_owned()));
+        if let Some(error) = &slot.write_failure {
+            return Err(error.clone());
         }
         slot.data = Some(data.to_owned());
         drop(slot);
@@ -295,6 +295,10 @@ fn play_initializes_real_mulligan_and_saves_without_frame_write_spam() {
             .expect("view")
             .decision_submitted
     );
+    assert_eq!(
+        app.world().resource::<Battle>().notification,
+        "Your decision is saved; waiting for opponent."
+    );
     assert_eq!(store.0.lock().expect("slot").writes, 2);
     ai_action(&mut app);
     assert_eq!(
@@ -369,7 +373,8 @@ fn normal_fast_and_instant_ai_timing_respects_focus_and_never_catches_up() {
 #[test]
 fn failed_save_pauses_commands_and_retry_repeats_only_the_write() {
     let (mut app, store) = resume_fixture(42, None, Speed::Instant);
-    store.0.lock().expect("slot").fail_write = true;
+    store.0.lock().expect("slot").write_failure =
+        Some(StorageError::Write("test write failure".to_owned()));
     activate(&mut app, Control::KeepHand);
     assert_eq!(revision(&app), 1);
     assert!(app.world().resource::<Battle>().error.is_some());
@@ -383,7 +388,7 @@ fn failed_save_pauses_commands_and_retry_repeats_only_the_write() {
     assert_eq!(session_save(&app), before);
     focus(&mut app, false);
     let attempts = store.0.lock().expect("slot").writes;
-    store.0.lock().expect("slot").fail_write = false;
+    store.0.lock().expect("slot").write_failure = None;
     activate(&mut app, Control::Retry);
     assert!(app.world().resource::<Battle>().error.is_none());
     assert!(!app.world().resource::<Runtime>().dirty);
@@ -429,6 +434,177 @@ fn refresh_and_resume_preserve_pending_ai_and_do_not_duplicate_accepted_decision
     activate(&mut refreshed, Control::Resume);
     assert_unique_screen(&mut refreshed, Screen::Battle);
     assert_eq!(revision(&refreshed), 2);
+}
+
+#[test]
+fn quota_error_preserves_old_slot_and_retry_saves_the_accepted_command_once() {
+    let (mut app, store) = resume_fixture(42, None, Speed::Instant);
+    let old_slot = store.0.lock().expect("slot").data.clone();
+    store.0.lock().expect("slot").write_failure = Some(StorageError::Quota);
+    activate(&mut app, Control::KeepHand);
+    assert_eq!(revision(&app), 1);
+    assert!(
+        app.world()
+            .resource::<Battle>()
+            .error
+            .as_ref()
+            .expect("quota diagnostic")
+            .contains("Local storage is full")
+    );
+    assert_eq!(store.0.lock().expect("slot").data, old_slot);
+    assert!(app.world().resource::<Runtime>().dirty);
+    let accepted = session_save(&app);
+    focus(&mut app, true);
+    for _ in 0..16 {
+        app.update();
+    }
+    assert_eq!(
+        session_save(&app),
+        accepted,
+        "quota failures pause opponent execution"
+    );
+    focus(&mut app, false);
+    store.0.lock().expect("slot").write_failure = None;
+    activate(&mut app, Control::Retry);
+    assert_eq!(revision(&app), 1);
+    assert_eq!(session_save(&app), accepted);
+    assert!(app.world().resource::<Battle>().error.is_none());
+    let encoded = store
+        .0
+        .lock()
+        .expect("slot")
+        .data
+        .clone()
+        .expect("retried save");
+    let saved: LocalSave = serde_json::from_str(&encoded).expect("local envelope");
+    assert_eq!(saved.session, accepted);
+    ai_action(&mut app);
+    assert_eq!(revision(&app), 2);
+}
+
+fn result_fixture(health: [u32; 2], cost: u32, power: u32) -> (App, MemoryStore) {
+    let cards = format!("[(id: (1), name: \"Unit\", cost: {cost}, power: {power}, health: 1)]");
+    let ids = ["(1)"; 20].join(",");
+    let decks = format!(
+        "[(cards: [{ids}], stronghold_health: {}),(cards: [{ids}], stronghold_health: {})]",
+        health[0], health[1]
+    );
+    let content = Content::parse(&cards, &decks).expect("validated result fixture");
+    let session = Session::new(&content, 2).expect("real rules match");
+    let catalog = content.cards().to_vec();
+    let (mut app, store) = empty_application();
+    {
+        let mut runtime = app.world_mut().resource_mut::<Runtime>();
+        runtime.content = Some(content);
+        runtime.session = Some(session);
+        runtime.last_seed = Some(2);
+    }
+    {
+        let mut battle = app.world_mut().resource_mut::<Battle>();
+        battle.catalog = catalog;
+        battle.speed = Speed::Instant;
+        battle.resume_available = true;
+    }
+    activate(&mut app, Control::Resume);
+    (app, store)
+}
+
+fn result_choice(battle: &Battle, win: bool) -> Command {
+    match battle.view.as_ref().expect("view").phase {
+        Phase::Mulligan => Command::KeepHand,
+        Phase::InitialResourcing => Command::ChooseInitialResources { cards: vec![] },
+        Phase::Regroup => Command::ChooseRegroupResource { card: None },
+        Phase::Action if win => battle
+            .legal
+            .iter()
+            .find(|command| {
+                matches!(
+                    command,
+                    Command::Attack {
+                        target: AttackTarget::Stronghold(_),
+                        ..
+                    }
+                )
+            })
+            .or_else(|| {
+                battle
+                    .legal
+                    .iter()
+                    .find(|command| matches!(command, Command::PlayUnit { .. }))
+            })
+            .or_else(|| {
+                battle
+                    .legal
+                    .iter()
+                    .find(|command| **command == Command::ClaimInitiative)
+            })
+            .cloned()
+            .unwrap_or(Command::Pass),
+        Phase::Action => Command::Pass,
+        Phase::Finished => panic!("finished fixture has no command"),
+    }
+}
+
+#[test]
+fn real_rules_outcomes_render_victory_defeat_and_draw_and_clear_the_active_slot() {
+    for (health, cost, power, outcome, label) in [
+        ([1000, 1], 0, 1, Outcome::Winner(PlayerId::Zero), "Victory"),
+        ([1, 1000], 0, 1, Outcome::Winner(PlayerId::One), "Defeat"),
+        ([1, 1], u32::MAX, 0, Outcome::Draw, "Draw"),
+    ] {
+        let (mut app, store) = result_fixture(health, cost, power);
+        for _ in 0..512 {
+            let battle = app.world().resource::<Battle>();
+            if battle.view.as_ref().expect("view").outcome.is_some() {
+                break;
+            }
+            if app
+                .world()
+                .resource::<Runtime>()
+                .session
+                .as_ref()
+                .expect("session")
+                .needs_ai()
+            {
+                ai_action(&mut app);
+            } else {
+                let command = result_choice(battle, outcome == Outcome::Winner(PlayerId::Zero));
+                human_command(&mut app, &command);
+            }
+        }
+        assert_eq!(
+            app.world()
+                .resource::<Battle>()
+                .view
+                .as_ref()
+                .expect("view")
+                .outcome,
+            Some(outcome)
+        );
+        assert_unique_screen(&mut app, Screen::Results);
+        let round = app
+            .world()
+            .resource::<Battle>()
+            .view
+            .as_ref()
+            .expect("view")
+            .round;
+        let texts: Vec<_> = app
+            .world_mut()
+            .query::<&Text>()
+            .iter(app.world())
+            .map(|text| text.0.as_str())
+            .collect();
+        assert!(
+            texts.contains(&label),
+            "the actual Results UI must identify {label}"
+        );
+        assert!(texts.contains(&format!("Battle ended in round {round}").as_str()));
+        assert!(!app.world().resource::<Battle>().resume_available);
+        assert!(store.0.lock().expect("slot").data.is_none());
+        assert!(store.0.lock().expect("slot").clears > 0);
+        assert!(app.world().resource::<Battle>().error.is_none());
+    }
 }
 
 #[test]
@@ -536,6 +712,10 @@ fn buffered_ai_resources_preserve_draft_and_reverse_selection_commits_legally() 
         session_save(&app),
         before,
         "AI decision is authoritative even when buffered"
+    );
+    assert_eq!(
+        app.world().resource::<Battle>().notification,
+        "Choose up to two cards to resource."
     );
     let before_revision = revision(&app);
     activate(&mut app, Control::ConfirmResources);

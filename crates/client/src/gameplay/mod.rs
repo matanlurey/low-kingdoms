@@ -594,7 +594,7 @@ fn succeeded(runtime: &mut Runtime, battle: &mut Battle, events: &[Event], human
         .iter()
         .rev()
         .find_map(|event| describe(event, battle))
-        .unwrap_or_else(|| "Decision submitted; waiting for opponent.".to_owned());
+        .unwrap_or_else(|| decision_feedback(battle).to_owned());
     if human || battle.view.as_ref().map(|view| view.phase) != previous_phase {
         battle.selected = None;
         battle.attacker = None;
@@ -604,6 +604,25 @@ fn succeeded(runtime: &mut Runtime, battle: &mut Battle, events: &[Event], human
         preserve_choices(battle);
     }
     persist(runtime, battle);
+}
+
+fn decision_feedback(battle: &Battle) -> &'static str {
+    let Some(view) = battle.view.as_ref() else {
+        return "Battle is ready.";
+    };
+    match view.phase {
+        Phase::Mulligan if !view.decision_submitted => "Keep or replace your opening hand.",
+        Phase::InitialResourcing if !view.decision_submitted => {
+            "Choose up to two cards to resource."
+        }
+        Phase::Regroup if !view.decision_submitted => "Choose up to one card to resource.",
+        Phase::Mulligan | Phase::InitialResourcing | Phase::Regroup => {
+            "Your decision is saved; waiting for opponent."
+        }
+        Phase::Action if view.active_player == Some(PlayerId::Zero) => "Your action.",
+        Phase::Action => "Opponent is acting.",
+        Phase::Finished => "Battle complete.",
+    }
 }
 
 fn preserve_choices(battle: &mut Battle) {
