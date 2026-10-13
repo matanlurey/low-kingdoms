@@ -779,10 +779,10 @@ if (routes.length) {
   test("complete battle through rendered controls, resume, and restart", async ({
     page,
   }, testInfo) => {
-    // DPR 2 software rendering measured eight minutes locally; retain enough
-    // headroom for the slower CI renderer without removing any evidence.
+    // DPR 2 completed in 553 seconds on one CI host; another exhausted 900
+    // seconds during restart. Preserve every assertion on slower renderers.
     test.setTimeout(
-      testInfo.project.use.deviceScaleFactor === 2 ? 900_000 : 600_000,
+      testInfo.project.use.deviceScaleFactor === 2 ? 1_200_000 : 600_000,
     );
     observeErrors(page);
     const touch = Boolean(testInfo.project.use.hasTouch);

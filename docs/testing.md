@@ -165,14 +165,14 @@ inherit that desktop window constraint.
 Playwright 1.63.0 selects Chromium **153.0.8010.12**, browser revision **1243**, for this baseline.
 Installed browser availability does not by itself establish successful WASM rendering.
 Default evidence is `evidence/web/`, including server logs, captures, browser diagnostics, and
-retained traces. The orchestration timeout defaults to **3600 seconds** for all 55 cases in the
-viewport matrix on software renderers; ordinary tests have 120-second deadlines and complete-battle
-scenarios have a 600-second deadline, except `phone-landscape-dpr2` at 900 seconds.
-That DPR 2 match measured 482.5 seconds locally; the observed desktop CI/local 6.1/4.3-minute
-ratio projects about 681 seconds. This narrow bound preserves every assertion. Ordinary waits
-and the 3600-second aggregate remain bounded; no case is dropped or retried.
-Required resource
-failures, unhandled errors, readiness timeout, or a missing browser fail rather than skip.
+retained traces. The orchestration timeout defaults to **4200 seconds** for all 55 cases in the
+viewport matrix on software renderers. Ordinary tests have 120-second deadlines and complete
+matches 600 seconds, except `phone-landscape-dpr2` at 1200 seconds. Expect waits remain 60 seconds,
+CI's browser job 90 minutes, and retries zero. The correction follows an actual overall-budget
+failure after successful Results/restart: its last screen poll was interrupted only 925.5 ms into
+its normal allowance. All cases/assertions remain; corrected-budget full CI must execute before
+closure. Required resource failures, unexpected errors, readiness timeout, or unavailable required
+browser/renderer fail rather than skip.
 
 The maintained suite selects the supported `channel: "chromium"` full Chromium executable.
 This matters for the five real background-tab scenarios: the fixture disables Playwright's focus

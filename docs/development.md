@@ -157,11 +157,12 @@ multi-tab focus/visibility checks. Setup installs the pinned browser; a working 
 not a substitute for the full-channel background scenarios. If local process/UNIX-socket policy
 blocks Chromium's ProcessSingleton, record the full smoke as blocked and verify on a provisioned
 runner. Do not disable the background policy or replace actual tab activity with a mocked field.
-The full 55-case smoke is bounded to 3600 seconds (browser CI job 90 minutes). Complete-match
-tests allow 600 seconds, with only `phone-landscape-dpr2` allowed 900 seconds: its local 482.5-second
-measurement and observed desktop CI/local 6.1/4.3-minute ratio project about 681 seconds. Ordinary
-cases remain 120 seconds. This changes one bounded deadline without removing assertions, retrying
-cases, or replacing the required full-channel check.
+The full 55-case smoke is bounded to 4200 seconds (browser CI job 90 minutes). Complete matches
+allow 600 seconds, with only `phone-landscape-dpr2` allowed 1200 seconds. The same-source push
+passed all 55, but its separate PR exhausted the previous scenario budget after a valid full match
+and fresh restart, interrupting the final normal 60-second screen poll after only 925.5 ms. The
+bounded timing correction preserves every assertion and zero retries. Ordinary cases remain
+120 seconds and expect waits 60 seconds; no product rule or game source changes for this recovery.
 
 Headless battle tests cover content, view-only AI, complete simulations, and exact saved continuation.
 Client tests use production command/scheduling/presentation paths. Browser tests use real compiled

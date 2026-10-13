@@ -81,7 +81,7 @@ jobs:
           key: wasm32-production-test-support
       - run: cargo xtask setup
       - run: npm exec --prefix tools/web-tests -- playwright install-deps chromium
-      - run: cargo xtask smoke-web --timeout 3600
+      - run: cargo xtask smoke-web --timeout 4200
       - name: Upload verified production site
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4

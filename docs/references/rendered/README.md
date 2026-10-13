@@ -37,8 +37,8 @@ the [Milestone 1B acceptance record](../../plans/milestone-1b-acceptance.md) sep
 complete browser matrix and all verification outcomes.
 
 The four native captures come from the successful native-render job in
-[Actions run 38360813050](https://github.com/matanlurey/low-kingdoms/actions/runs/38360813050),
-code checkpoint `a6eddfc5d6193895e09dd0e8fd1485982564b8f7`. Environment: Ubuntu 24.04,
+[Actions run 38372317206](https://github.com/matanlurey/low-kingdoms/actions/runs/38372317206),
+code checkpoint `71202a6bd32a7e726b38f4f0679554347c22bd75`, artifact `11800026645`. Environment: Ubuntu 24.04,
 Xvfb/Openbox at 1280×720/DPR 1, Mesa 25.2.8, and llvmpipe LLVM 20.1.2 Vulkan CPU rendering.
 All four were inspected by the coordinating worker; text, cards, counters, and controls were
 readable without obvious clipping.
@@ -68,10 +68,9 @@ Auto margins preserve horizontal centering when the hand fits, while overflowing
 wrapped content begin at a reachable edge. The acceptance record includes the actual Bevy layout
 regressions and the subsequent maintained CI outcome.
 
-The current native artifact from
-[Actions run 38367364733](https://github.com/matanlurey/low-kingdoms/actions/runs/38367364733)
-contains PNGs byte-identical to the four reviewed native references. The coordinating worker
-verified that equality. The [acceptance record](../../plans/milestone-1b-acceptance.md) retains
+The corrected native Mulligan capture was reviewed and replaced after the alignment fix. The
+other three current native PNGs are byte-identical to the earlier reviewed references; the
+coordinating worker verified that equality. The [acceptance record](../../plans/milestone-1b-acceptance.md) retains
 the separately required maintained full-Chromium matrix status.
 
 | Screenshot                                                                             | Logical canvas | Captured state                                          |
