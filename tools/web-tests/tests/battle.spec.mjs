@@ -339,15 +339,31 @@ async function revealCard(page, id, rowIds, touch) {
     // Follow the actual target's side of the viewport. Searching blindly toward
     // one edge first can repeatedly overscroll before a left-side target.
     const direction = position < start ? -1 : 1;
-    await scrollGesture(page, rectangle, direction, touch);
+    const length = horizontal ? card.width : card.height;
+    const extent = horizontal ? rectangle.width : rectangle.height;
+    const clipped =
+      direction < 0 ? start - position : position + length - (start + extent);
+    // Move only the clipped distance (past the gesture threshold). A full-pane
+    // swipe can carry a middle card from one clipped edge to the other forever.
+    await scrollGesture(
+      page,
+      rectangle,
+      direction,
+      touch,
+      Math.max(16, clipped + 1),
+    );
     scrolled = true;
   }
   throw new Error(`Card ${id} was not reachable by real scrolling.`);
 }
 
 async function reverseAtEdge(page, id, rowIds, touch) {
+  const initial = await bridge(page);
+  const rectangle = rowRectangle(initial, rowIds, page.viewportSize());
+  // Drive to the far edge first, including a gesture beyond its finite extent.
+  // A subsequent short reversal must not burn an invisible excess offset.
+  await scrollGesture(page, rectangle, 1, touch);
   const before = await bridge(page);
-  const rectangle = rowRectangle(before, rowIds, page.viewportSize());
   const horizontal = rectangle.horizontal !== false;
   const card = cardInRow(before, id, rectangle);
   const position = horizontal ? card.x : card.y;
@@ -375,11 +391,22 @@ async function selectCard(page, id, cards, touch) {
 
 async function showHand(page, touch) {
   const state = await bridge(page);
+  if (state.battle.view.hand.length === 0) return;
   const visibleHand = state.battle.view.hand.some((card) =>
     visible(controlFor(state, `card-${card.id}`), page.viewportSize()),
   );
-  if (!visibleHand && controlFor(state, "hand"))
+  if (!visibleHand && controlFor(state, "hand")) {
     await activate(page, "hand", touch);
+    await waitForPanel(page, "Hand");
+    await expect
+      .poll(async () => {
+        const current = await bridge(page);
+        return current.battle.view.hand.some((card) =>
+          visible(controlFor(current, `card-${card.id}`), page.viewportSize()),
+        );
+      })
+      .toBe(true);
+  }
 }
 
 async function closePanel(page, touch) {
