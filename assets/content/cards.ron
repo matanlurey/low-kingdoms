@@ -1,0 +1,8 @@
+[
+    (id: (1), name: "Infantry", cost: 1, power: 2, health: 2),
+    (id: (2), name: "Archer", cost: 2, power: 3, health: 2),
+    (id: (3), name: "Guard", cost: 2, power: 1, health: 5),
+    (id: (4), name: "Knight", cost: 3, power: 3, health: 4),
+    (id: (5), name: "Cavalry", cost: 4, power: 5, health: 3),
+    (id: (6), name: "Veteran", cost: 5, power: 5, health: 6),
+]
