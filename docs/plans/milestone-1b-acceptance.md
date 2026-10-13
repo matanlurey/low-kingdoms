@@ -7,18 +7,16 @@ The original [1A gameplay specification](milestone-1a.md) remains unchanged.
 
 ## Status and evidence policy
 
-Milestone status: **incomplete pending corrected-budget CI and final record closure**.
-Implementation checkpoint `71202a6bd32a7e726b38f4f0679554347c22bd75` passed all seven PUSH gates,
-with independently verified full Chromium 55/55 and reviewed pixels. The same-head PR browser
-finished 46 passed/one DPR 2 complete-match timeout/eight not run in 54.2 minutes. Its trace and
-failure PNG show a completed round-six result, fresh restart, both accepted Keep decisions, and
-correct InitialResourcing/revision 2. The final screen poll was interrupted only 925.5 ms into its
-normal 60-second wait by the overall scenario budget, not by a failed game operation.
-All individual gameplay/rendering evidence remains valid. Only bounded test deadlines changed:
-DPR 2 full-match 1200 seconds and aggregate 4200 seconds, with all assertions, zero retries,
-ordinary 120-second cases, 60-second waits, other 600-second matches, and CI's 90-minute limit
-unchanged. Focused tooling checks passed; corrected-budget full CI remains Pending. No product
-source or established rule changed to recover this infrastructure timing failure.
+Milestone status: **complete at the VERIFIED IMPLEMENTATION CHECKPOINT
+`6e537c3d16671c43edc0d3ad0df275d66da880a4`**.
+Corrected-budget PUSH run 38381702292 and PR run 38381707332 both passed all seven required gates;
+Pages deployment was correctly skipped. Both actual full Chromium reports passed 55/55 with
+55 attempts, zero skipped/unexpected/flaky cases, and all 55 diagnostics empty. Every one of the
+76 criteria has executed evidence, including genuine background/reload checks and reviewed pixels.
+Local maintained native/full-Chromium limits remain Blocked, without replacing supported CI results.
+This concrete implementation checkpoint remains valid when a records-only commit receives another
+SHA; final documentation-head checks are reported separately in the PR. No Milestone 1B feature
+is deferred and no later gameplay system was introduced.
 
 ## Criterion mapping
 
@@ -104,24 +102,24 @@ source or established rule changed to recover this infrastructure timing failure
 
 ### Verification
 
-| ID  | Requirement                          | Implementation evidence                                                     | Verification evidence                                                                                                                                                                                      | Status  |
-| --- | ------------------------------------ | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
-| T01 | Existing 1A tests pass               | Unchanged complete rules suite and doctest.                                 | Focused rules check and maintained workspace/native CI gates.                                                                                                                                              | Passed  |
-| T02 | AI unit tests pass                   | `crates/battle/tests/content_ai.rs`.                                        | Focused battle and workspace tests.                                                                                                                                                                        | Passed  |
-| T03 | Complete AI tests pass               | Seeded bounded headless AI-versus-AI matches.                               | `content_ai::complete_ai_matches_are_legal_deterministic_and_terminate_across_seeds`: 32 seeded matches.                                                                                                   | Passed  |
-| T04 | Bevy tests pass                      | Actual production client systems in headless App.                           | Current published CI executed 43 default/47 test-support client cases with actual native feature configurations.                                                                                           | Passed  |
-| T05 | Persistence tests pass               | Session exact restore plus injected/platform storage cases.                 | Session/native/client persistence tests and 20 real-WASM storage supplement cases passed.                                                                                                                  | Passed  |
-| T06 | Desktop browser input passes         | Actual generated WASM with pointer/keyboard gameplay.                       | Both maintained desktop viewport full matches and real background/reload/resume scenarios passed at a6ed; independent manual desktop lifecycle completed.                                                  | Passed  |
-| T07 | Mobile touch passes                  | Actual generated WASM with touch/swipe/orientation gameplay.                | Three complete touch matches/focused cases passed; formerly failing minimum rotated-Mulligan inspection now passes both maintained routes after production alignment correction.                           | Passed  |
-| T08 | Refresh/resume passes                | Browser slot survives refresh; real Resume control.                         | Actual full-Chromium background/reload/exactly-once passed all five viewports: 30.4/32.2/32.7/33.9/71.5 s; engine/native continuation cases also passed.                                                   | Passed  |
-| T09 | Native build passes                  | Pinned native application and libraries.                                    | Linux/macOS/Windows maintained CI matrix; local result separately recorded.                                                                                                                                | Passed  |
-| T10 | WASM build passes                    | Production/test-support application, battle, and rules target gates.        | `just check-web` and CI WASM gate.                                                                                                                                                                         | Passed  |
-| T11 | Strict linting passes                | Workspace all/pedantic/nursery and rustdoc warnings denied.                 | `just check`, explicit supported WASM/feature gates.                                                                                                                                                       | Passed  |
-| T12 | Formatting passes                    | Existing rustfmt and pinned Prettier settings.                              | `just fmt-check`; CI formatting.                                                                                                                                                                           | Passed  |
-| T13 | Native render passes where supported | Real Bevy screenshot completion with bounded failure.                       | Current 712 native-render CI passed four scenes; root reviewed Title, corrected top-aligned Mulligan, Battlefield, and Defeat.                                                                             | Passed  |
-| T14 | Browser pixels inspected             | Actual captures of battlefield/cards/panels/targets/log/results.            | Root personally reviewed all four current native frames and fresh desktop/phone complete-match targeting, damage, results, rotated/DPR/hand/footer frames.                                                 | Passed  |
-| T15 | Full CI passes                       | All native, quality, WASM, browser, and native-render jobs at PR head.      | Push seven gates/full Chromium 55 Passed. Same-head PR ended with 46 passed, one DPR 2 scenario timeout, eight not run; trace proves budget interruption after valid restart. Corrected-budget CI Pending. | Pending |
-| T16 | Complete documentation               | Specification, architecture/development/testing, instructions, this record. | Documentation/all76 mappings/visual references prepared and formatted. Final record closure Pending until corrected-budget full CI succeeds.                                                               | Pending |
+| ID  | Requirement                          | Implementation evidence                                                     | Verification evidence                                                                                                                                                                       | Status |
+| --- | ------------------------------------ | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| T01 | Existing 1A tests pass               | Unchanged complete rules suite and doctest.                                 | Focused rules check and maintained workspace/native CI gates.                                                                                                                               | Passed |
+| T02 | AI unit tests pass                   | `crates/battle/tests/content_ai.rs`.                                        | Focused battle and workspace tests.                                                                                                                                                         | Passed |
+| T03 | Complete AI tests pass               | Seeded bounded headless AI-versus-AI matches.                               | `content_ai::complete_ai_matches_are_legal_deterministic_and_terminate_across_seeds`: 32 seeded matches.                                                                                    | Passed |
+| T04 | Bevy tests pass                      | Actual production client systems in headless App.                           | Current published CI executed 43 default/47 test-support client cases with actual native feature configurations.                                                                            | Passed |
+| T05 | Persistence tests pass               | Session exact restore plus injected/platform storage cases.                 | Session/native/client persistence tests and 20 real-WASM storage supplement cases passed.                                                                                                   | Passed |
+| T06 | Desktop browser input passes         | Actual generated WASM with pointer/keyboard gameplay.                       | Both maintained desktop viewport full matches and real background/reload/resume scenarios passed at a6ed; independent manual desktop lifecycle completed.                                   | Passed |
+| T07 | Mobile touch passes                  | Actual generated WASM with touch/swipe/orientation gameplay.                | Three complete touch matches/focused cases passed; formerly failing minimum rotated-Mulligan inspection now passes both maintained routes after production alignment correction.            | Passed |
+| T08 | Refresh/resume passes                | Browser slot survives refresh; real Resume control.                         | Corrected-budget full Chromium actual background/reload/exactly-once passed all five viewports: 29.6/33.4/31.8/27.4/75.7 s. Native/replay and human refresh cases passed.                   | Passed |
+| T09 | Native build passes                  | Pinned native application and libraries.                                    | Linux/macOS/Windows maintained CI matrix; local result separately recorded.                                                                                                                 | Passed |
+| T10 | WASM build passes                    | Production/test-support application, battle, and rules target gates.        | `just check-web` and CI WASM gate.                                                                                                                                                          | Passed |
+| T11 | Strict linting passes                | Workspace all/pedantic/nursery and rustdoc warnings denied.                 | `just check`, explicit supported WASM/feature gates.                                                                                                                                        | Passed |
+| T12 | Formatting passes                    | Existing rustfmt and pinned Prettier settings.                              | `just fmt-check`; CI formatting.                                                                                                                                                            | Passed |
+| T13 | Native render passes where supported | Real Bevy screenshot completion with bounded failure.                       | Current 712 native-render CI passed four scenes; root reviewed Title, corrected top-aligned Mulligan, Battlefield, and Defeat.                                                              | Passed |
+| T14 | Browser pixels inspected             | Actual captures of battlefield/cards/panels/targets/log/results.            | Root personally reviewed all four current native frames and fresh desktop/phone complete-match targeting, damage, results, rotated/DPR/hand/footer frames.                                  | Passed |
+| T15 | Full CI passes                       | All native, quality, WASM, browser, and native-render jobs at PR head.      | VERIFIED IMPLEMENTATION CHECKPOINT 6e: PUSH38381702292 and PR38381707332 both Passed all seven gates and actual full Chromium55/55; Pages deployment correctly skipped.                     | Passed |
+| T16 | Complete documentation               | Specification, architecture/development/testing, instructions, this record. | Approved specification, architecture/development/testing/instructions, all76criterion records, and reviewed visual references complete; pinned formatting and root structure checks Passed. | Passed |
 
 ## Architectural decisions and interpretations
 
@@ -152,60 +150,80 @@ regression must be recorded here rather than silently changing the 17 establishe
 
 ## Verification record
 
-Current implementation checkpoint `71202a6bd32a7e726b38f4f0679554347c22bd75` passed all seven
-required gates in [PUSH run 38372312078](https://github.com/matanlurey/low-kingdoms/actions/runs/38372312078).
-Pages deployment was correctly skipped. [PR run 38372317206](https://github.com/matanlurey/low-kingdoms/actions/runs/38372317206)
-passed all six non-browser gates, but its browser job failed after 54 minutes 48 seconds.
-Artifact 11802666821/report/trace establish pure scenario-budget exhaustion: 46 passed, one
-DPR 2 full-match timeout, eight not run in 54.2 minutes. The final poll had only 925.5 ms before
-interruption although its own allowance was 60 seconds. Root independently reviewed the driver
-audit and failure PNG showing the correctly restarted InitialResourcing screen. The successful
-push does not make that PR check successful; corrected-budget verification remains Pending.
+VERIFIED IMPLEMENTATION CHECKPOINT `6e537c3d16671c43edc0d3ad0df275d66da880a4` passed all seven
+required gates in [PUSH run 38381702292](https://github.com/matanlurey/low-kingdoms/actions/runs/38381702292).
+[PR run 38381707332](https://github.com/matanlurey/low-kingdoms/actions/runs/38381707332) independently
+passed all seven gates as well. Pages deployment was correctly skipped in both runs. Each full
+browser report and empty diagnostics were verified separately; neither run is inferred from the other.
 
-The root independently confirmed the full Chromium report: expected 55, skipped/unexpected/flaky 0,
-duration 2,212,853.67 ms (36.9 minutes). All 55 diagnostic attachments were empty: 20 battle,
-15 screen, and 20 storage reports, with canonical copies also empty. Complete matches and actual
-background/reload/exactly-once cases passed at every configured viewport. Client tests executed
-43 default/47 test-support; Linux/macOS executed 105 workspace tests plus one doctest, and Windows
-103 plus one doctest (two Unix-only subprocess cases are platform scoped).
+The corrected-budget browser report confirms expected 55, 55 attempts, skipped/unexpected/flaky 0,
+and 36.49 minutes. All 55 diagnostics are empty: 20 battle, 15 screen, and 20 storage reports.
+All five complete matches and genuine background/reload/exactly-once cases passed. Both push and
+PR non-browser gates executed 43 default/47 test-support client tests, 105 workspace tests plus
+one doctest on Linux/macOS, and 103 plus one doctest on Windows (two Unix process cases excluded).
+Production/support WASM remained 62,375,816/62,503,117 bytes.
 
-Local maintained native checks remain Blocked by missing host prerequisites. Local full Chromium
-launch remains Blocked by ProcessSingleton UNIX-socket `EPERM`; those are not successful skips.
-Supported CI ran the actual native configurations and full Chromium. Supplementary shell 50/50
-remains separate evidence because it excluded five real-background cases; the verified full CI
-suite executed and passed those cases rather than inferring them from a shell.
+Local maintained native checks remain Blocked by missing host prerequisites, and local full
+Chromium remains Blocked by ProcessSingleton UNIX-socket `EPERM`. They are not successful skips.
+Provisioned CI executed actual native features and full Chromium. The separate shell 50/50
+excluded five background cases; the verified full suite actually executed and passed those cases.
+Both corrected-budget browser reports are now complete and independently verified.
 
-| Check                                                                  | Actual result                                                                | Evidence or limitation                                                                                                                   |
-| ---------------------------------------------------------------------- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Rules tests                                                            | Passed: 28 tests and one doctest                                             | Complete combat/fatigue/initiative matches unchanged.                                                                                    |
-| Battle content/AI/session tests                                        | Passed: 24                                                                   | Includes 32 complete AI seeds and 16 saved continuation seeds.                                                                           |
-| Maintained client tests                                                | Passed: 43 default / 47 test-support                                         | Production plugins/configurations; input, geometry, privacy, lifecycle, outcomes, and storage.                                           |
-| Native workspace tests                                                 | Passed: Linux/macOS 105 + one doctest; Windows 103 + one doctest             | Two Unix-only subprocess cases explain the difference.                                                                                   |
-| Formatting/structure/strict Clippy/rustdoc                             | Passed at implementation checkpoint; budget patch focused gates Passed       | xtask ten tests, strict all-target Clippy, warnings-denied rustdoc, rustfmt, structure, browser syntax, and Prettier.                    |
-| `just check-web`                                                       | Passed locally and in CI                                                     | Production/test-support compile and strict Clippy.                                                                                       |
-| `just build-web`                                                       | Passed; production WASM 62,375,816 bytes / support 62,503,117 bytes          | Exact completed push wasm-release build-log measurements.                                                                                |
-| `just check`                                                           | Blocked locally; provisioned CI quality Passed                               | Local native host prerequisites unavailable.                                                                                             |
-| `just smoke-native`                                                    | Blocked locally; provisioned CI Passed, all four current images inspected    | Artifact 11800026645; corrected Mulligan received its own review.                                                                        |
-| `just smoke-web` / full maintained Chromium                            | Blocked locally; supported PUSH CI Passed 55/55                              | Full report verified; all five real-background cases executed.                                                                           |
-| Supplementary shell subset                                             | Passed: 50/50, all five complete matches                                     | Exactly five background cases excluded; 37.7 minutes, no skipped/unexpected/flaky cases.                                                 |
-| Focused phone input / rotated Mulligan                                 | Passed                                                                       | Edge reversal/middle card/confirm/deploy/quick Pass and root/subpath first/last inspection.                                              |
-| `just check-all`                                                       | Blocked locally                                                              | Individual mandatory gates all Passed on provisioned CI; no local aggregate pass claimed.                                                |
-| PUSH native Linux/macOS/Windows, quality, WASM, native-render, browser | Passed: all seven required gates                                             | Concrete verified implementation checkpoint/run above; deployment correctly skipped.                                                     |
-| Separate same-head PR browser                                          | Failed: 46 passed, one DPR 2 full-match timeout, eight not run; 54.2 minutes | Trace/failure PNG show valid completed match and restarted InitialResourcing. Scenario budget interrupted the final poll after 925.5 ms. |
-| Independent desktop playable review                                    | Passed                                                                       | Complete manual mouse match, fresh restart, Main Menu/Resume, inspected captures.                                                        |
-| Desktop/mobile rendered gameplay and review                            | Passed                                                                       | Full Chromium complete matches, all five combat viewports, rotation/results/background cases, root pixel review.                         |
+| Check                                                                  | Actual result                                                                  | Evidence or limitation                                                                                   |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| Rules tests                                                            | Passed: 28 tests and one doctest                                               | Complete combat/fatigue/initiative matches unchanged.                                                    |
+| Battle content/AI/session tests                                        | Passed: 24                                                                     | Includes 32 complete AI seeds and 16 saved continuation seeds.                                           |
+| Maintained client tests                                                | Passed: 43 default / 47 test-support in both non-browser CI runs               | Production plugins/native features; input, geometry, privacy, lifecycle, outcomes, and storage.          |
+| Native workspace tests                                                 | Passed: Linux/macOS 105 + one doctest; Windows 103 + one doctest               | Two Unix-only subprocess cases explain the difference.                                                   |
+| Formatting/structure/strict Clippy/rustdoc                             | Passed                                                                         | Corrected-budget non-browser CI plus focused ten xtask tests, strict lints/docs, syntax, and formatting. |
+| `just check-web`                                                       | Passed locally and in both corrected-budget CI runs                            | Production/test-support compile and strict Clippy.                                                       |
+| `just build-web`                                                       | Passed; production WASM 62,375,816 bytes / support 62,503,117 bytes            | Actual corrected-budget CI measurements; unchanged product bundle.                                       |
+| `just check`                                                           | Blocked locally; supported CI quality Passed                                   | Local native host prerequisites unavailable.                                                             |
+| `just smoke-native`                                                    | Blocked locally; supported corrected-budget CI Passed                          | PR artifact 11803726517 exactly matches all four published/root-reviewed references.                     |
+| `just smoke-web` / full maintained Chromium                            | Blocked locally; corrected-budget PUSH CI Passed 55/55                         | 55 attempts, no skipped/unexpected/flaky cases, all diagnostics empty.                                   |
+| Supplementary shell subset                                             | Passed: 50/50, all five complete matches                                       | Exactly five background cases excluded; independently superseded for that behavior by full Chromium.     |
+| Focused phone input / rotated Mulligan                                 | Passed                                                                         | Reversal/middle card/confirm/deploy/quick Pass and root/subpath first/last inspection.                   |
+| `just check-all`                                                       | Blocked locally                                                                | Mandatory individual gates Passed on provisioned push CI; no local aggregate pass claimed.               |
+| Corrected-budget PUSH native matrix/quality/WASM/native-render/browser | Passed: all seven gates                                                        | Concrete implementation checkpoint/run above.                                                            |
+| Corrected-budget PR native matrix/quality/WASM/native-render/browser   | Passed: all seven gates                                                        | Actual PR result/report verified separately from push; Pages deployment correctly skipped.               |
+| Corrected-budget PR browser                                            | Passed: 55/55, 55 attempts, zero skipped/unexpected/flaky cases, 47.12 minutes | All 55 diagnostic attachments empty: 20 battle, 15 screen, 20 storage.                                   |
+| Independent desktop/mobile playable and pixel review                   | Passed                                                                         | Complete real input, all five full matches/background cases, reviewed native/browser frames.             |
 
-| Full Chromium project     | Complete-match seconds | Actual background/reload seconds |
-| ------------------------- | ---------------------- | -------------------------------- |
-| Desktop 1280×720          | 201.6                  | 30.4                             |
-| Desktop 1280×800          | 216.7                  | 32.2                             |
-| Portrait 390×844          | 211.4                  | 32.7                             |
-| Minimum 375×667           | 172.9                  | 33.9                             |
-| Landscape 844×390 / DPR 2 | 553.4                  | 71.5                             |
+| Corrected-budget full Chromium project | Complete-match seconds | Genuine background/reload seconds |
+| -------------------------------------- | ---------------------- | --------------------------------- |
+| Desktop 1280×720                       | 196.4                  | 29.6                              |
+| Desktop 1280×800                       | 214.1                  | 33.4                              |
+| Portrait 390×844                       | 195.7                  | 31.8                              |
+| Minimum 375×667                        | 169.0                  | 27.4                              |
+| Landscape 844×390 / DPR 2              | 558.4                  | 75.7                              |
 
-These are software-renderer verification timings, not physical-device performance guarantees.
+| Corrected-budget PR full Chromium project | Complete-match seconds | Genuine background/reload seconds |
+| ----------------------------------------- | ---------------------- | --------------------------------- |
+| Desktop 1280×720                          | 255.5                  | 37.0                              |
+| Desktop 1280×800                          | 286.1                  | 41.3                              |
+| Portrait 390×844                          | 270.2                  | 41.3                              |
+| Minimum 375×667                           | 219.6                  | 34.7                              |
+| Landscape 844×390 / DPR 2                 | 719.1                  | 90.5                              |
+
+These are software-renderer check timings, not physical-device performance guarantees.
 
 ## Visual evidence and manual review
+
+Corrected-budget [browser artifact 11807050366](https://github.com/matanlurey/low-kingdoms/actions/runs/38381702292/artifacts/11807050366)
+is 27,837,625 bytes; SHA-256
+`cb509c8e0885d699a49ba65be6948145a681b3b3390032e1307e0022c36899a6`.
+Its actual report confirms all 55 corrected-budget cases and empty diagnostics. Its separate
+[PR browser artifact 11806453449](https://github.com/matanlurey/low-kingdoms/actions/runs/38381707332/artifacts/11806453449)
+is 28,163,700 bytes; SHA-256
+`bcc8aee719114ddc178c765ec774e0d786bd4a528e0634c7bd2a018f47f326aa`.
+That safely verified report passed 55/55 with 55 attempts, zero skipped/unexpected/flaky cases,
+47.12 minutes, and all 55 diagnostics empty. Both runs establish actual full-channel gameplay
+and tab-background behavior independently. Corrected-budget
+[PR native artifact 11803726517](https://github.com/matanlurey/low-kingdoms/actions/runs/38381707332/artifacts/11803726517)
+exactly matches all four published/manually reviewed references; root verified their hashes against
+real tree `420babee`. The budget-only correction changes no product code or rendered layout.
+Earlier directly reviewed frames below retain concrete provenance; new corrected-budget results
+are the current verified implementation checkpoint, not a claim about a future records-only head.
 
 Current [native artifact 11800026645](https://github.com/matanlurey/low-kingdoms/actions/runs/38372317206/artifacts/11800026645)
 belongs to PR run 38372317206 and source `71202a6bd32a7e726b38f4f0679554347c22bd75`.
@@ -318,10 +336,10 @@ units and fixed decks are prototype fixtures. The AI is deterministic and basic 
 competitive. Saves require exact content/profile/version compatibility and have no migration.
 Chromium touch emulation does not certify Safari/iOS hardware or physical phone performance.
 
-Individual implementation and push-run evidence is established at the concrete checkpoint, but
-final closure is withheld because the same-head PR browser failed. Its actual trace was investigated and proves scenario-budget exhaustion after a valid restart.
-The bounded budget correction must pass complete CI before declaring the milestone complete.
-Local host/socket limitations remain Blocked rather than passed.
+All 76 requirements have executed evidence and both corrected-budget push/PR CI passed the
+complete matrix. Milestone/record closure is complete at the verified implementation checkpoint.
+No product rule or source correction was needed for the timing failure. Local host/socket limits
+remain Blocked, and physical-phone/Safari/interactive macOS/Windows claims remain excluded.
 
 ## Corrective verification and limits
 
@@ -344,21 +362,26 @@ Playwright focus emulation via CDP, then real visibility/focus controls the prod
 no document or game state is mocked. The supplementary shell excludes exactly five background
 cases. All five executed and passed in the verified complete push matrix.
 
-The successful push originally used the narrower 900-second DPR 2 / 3600-second aggregate bounds.
+The earlier source-712 push passed with 900-second DPR 2 / 3600-second aggregate bounds.
 The separate PR then exhausted the DPR 2 scenario budget after gameplay and a fresh restart had
 already succeeded. The correction permits 1200 seconds only for `phone-landscape-dpr2` full matches
 and 4200 seconds for the aggregate. Other complete matches remain 600 seconds, ordinary cases
 120 seconds, expect waits 60 seconds, and CI 90 minutes. All 55 assertions/cases and zero retries
 remain intact. Root reviewed the timing/comments-only three-file diff and actual failure PNG;
-focused host/tooling/syntax/format checks passed. Corrected-budget full CI remains Pending.
+focused host/tooling/syntax/format checks passed. Corrected-budget push and PR full CI both passed independently.
 
-## Corrected-budget verification pending
+## Corrected-budget verification
 
-The failure occurred after round-six Results, a fresh six-card restart, and both accepted Keep
-commands. InitialResourcing/revision 2 was visible in the failure PNG. The last normal screen poll
-was interrupted only 925.5 ms into its 60-second allowance. The independent trace/driver audit found
-no new gameplay or rendering defect. The budget patch changes only timing/comments in the browser
-scenario, xtask aggregate, and CI invocation. Its ten xtask tests, strict all-target Clippy,
-warnings-denied rustdoc, rustfmt, structure, browser JavaScript syntax, and Prettier all passed.
-The required next step is full corrected-budget CI, followed by final evidence closure; T15/T16
-remain Pending and no successful corrected-budget PR-browser conclusion is claimed yet.
+The historical source-712 PR ended 46 passed/one DPR 2 scenario timeout/eight not run after
+successful round-six Results, a fresh restart, both accepted Keep commands, and visible
+InitialResourcing/revision 2. Independent trace/driver review proved the last normal 60-second
+poll was interrupted only 925.5 ms into its allowance by the overall scenario deadline. Root viewed
+the correct restarted screen. The correction changed timing/comments only: DPR 2 scenario 1200
+seconds and aggregate 4200 seconds, ordinary cases 120, expect waits 60, other matches 600,
+CI 90 minutes, zero retries, and all 55 cases/assertions unchanged.
+
+Focused tooling checks and all seven corrected-budget gates passed in both push and PR runs.
+Both actual full Chromium suites passed 55/55, including all five genuine background/reload cases.
+The 1200/4200-second bounds resolved the trace-proven scenario-budget failure without changing
+product source, adding retries, removing cases/assertions, or weakening gameplay behavior checks.
+T15/T16 and milestone closure are complete at the verified implementation checkpoint.
