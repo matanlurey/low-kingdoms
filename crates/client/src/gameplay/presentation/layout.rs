@@ -91,7 +91,8 @@ fn mulligan(world: &mut World, presentation: &mut Presentation, root: Entity, la
             flex_grow: 1.0,
             min_height: px(0),
             width: percent(100),
-            align_content: AlignContent::Center,
+            // Wrapped rows must start inside the nonnegative scroll range.
+            align_content: AlignContent::Start,
             justify_content: JustifyContent::Center,
             flex_wrap: FlexWrap::Wrap,
             row_gap: px(8),
@@ -133,8 +134,10 @@ fn mulligan(world: &mut World, presentation: &mut Presentation, root: Entity, la
             flex_grow: 1.0,
             min_height: px(0),
             width: percent(100),
-            align_items: AlignItems::Center,
-            justify_content: JustifyContent::Center,
+            align_items: AlignItems::Start,
+            // The outer cards' auto margins center a fitting hand without
+            // putting overflowing cards before the scroll origin.
+            justify_content: JustifyContent::Start,
             column_gap: px(8),
             overflow: Overflow::scroll_x(),
             ..default()

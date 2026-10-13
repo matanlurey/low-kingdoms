@@ -779,7 +779,11 @@ if (routes.length) {
   test("complete battle through rendered controls, resume, and restart", async ({
     page,
   }, testInfo) => {
-    test.setTimeout(600_000);
+    // DPR 2 software rendering measured eight minutes locally; retain enough
+    // headroom for the slower CI renderer without removing any evidence.
+    test.setTimeout(
+      testInfo.project.use.deviceScaleFactor === 2 ? 900_000 : 600_000,
+    );
     observeErrors(page);
     const touch = Boolean(testInfo.project.use.hasTouch);
     await page.goto(process.env.LOW_KINGDOMS_BASE_URL);

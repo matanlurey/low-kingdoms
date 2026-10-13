@@ -70,8 +70,32 @@ pub(super) fn reconcile(
             .entry((zone, card.id))
             .or_insert_with(|| spawn(world, parent, card.id, layout));
         update(world, face, battle, card, unit, layout);
+        mulligan_margin(world, face, battle, card.id, layout);
     }
     reconcile_empty(world, presentation);
+}
+
+fn mulligan_margin(world: &mut World, face: &Face, battle: &Battle, id: CardId, layout: Layout) {
+    let margin = battle
+        .view
+        .as_ref()
+        .filter(|view| layout.landscape && view.phase == Phase::Mulligan)
+        .map_or_else(UiRect::default, |view| UiRect {
+            left: if view.hand.first().is_some_and(|card| card.id == id) {
+                auto()
+            } else {
+                px(0)
+            },
+            right: if view.hand.last().is_some_and(|card| card.id == id) {
+                auto()
+            } else {
+                px(0)
+            },
+            ..default()
+        });
+    if let Some(mut node) = world.get_mut::<Node>(face.entity) {
+        node.margin = margin;
+    }
 }
 
 fn spawn(world: &mut World, parent: Entity, id: CardId, layout: Layout) -> Face {

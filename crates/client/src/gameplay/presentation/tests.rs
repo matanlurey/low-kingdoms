@@ -10,6 +10,8 @@ use crate::{gameplay::Battle, screens::Screen, ui::Control};
 
 use super::{CardFace, DisabledControl, Presentation, Zone, configure};
 
+mod geometry;
+
 fn fixture() -> (App, Game) {
     let mut app = App::new();
     app.add_plugins((MinimalPlugins, bevy::state::app::StatesPlugin))

@@ -95,6 +95,12 @@ must reach a terminal outcome with a deterministic action bound. They do not sub
 playing the real interface. Timing tests use controlled elapsed time instead of blocking sleeps.
 Keep the existing complete combat/fatigue/initiative rules matches passing unchanged.
 
+Responsive geometry regressions use actual Bevy/Taffy layout at DPR 1 and 2. They verify reachable
+overflow origins on both axes and centering when a row fits, including rotated minimum-phone
+opening cards. Real-input root/subpath checks then inspect the first/last cards while comparing
+the unchanged human view and own submitted-decision state. Geometry success does not replace
+inspection of newly changed native wrapping/vertical alignment captures.
+
 ## Playable client acceptance
 
 `cargo test --locked -p low-kingdoms-client` must exercise production plugins and commands for
@@ -161,8 +167,10 @@ Installed browser availability does not by itself establish successful WASM rend
 Default evidence is `evidence/web/`, including server logs, captures, browser diagnostics, and
 retained traces. The orchestration timeout defaults to **3600 seconds** for all 55 cases in the
 viewport matrix on software renderers; ordinary tests have 120-second deadlines and complete-battle
-scenarios have a 600-second deadline, with bounded startup/expect waits. An observed desktop
-match took 270 seconds with software rendering, so the expanded matrix needs this bounded budget.
+scenarios have a 600-second deadline, except `phone-landscape-dpr2` at 900 seconds.
+That DPR 2 match measured 482.5 seconds locally; the observed desktop CI/local 6.1/4.3-minute
+ratio projects about 681 seconds. This narrow bound preserves every assertion. Ordinary waits
+and the 3600-second aggregate remain bounded; no case is dropped or retried.
 Required resource
 failures, unhandled errors, readiness timeout, or a missing browser fail rather than skip.
 
