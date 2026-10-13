@@ -7,7 +7,7 @@ use wasm_bindgen::prelude::wasm_bindgen;
 use super::PresentationReady;
 
 #[wasm_bindgen(
-    inline_js = "export function announceReady() { window.dispatchEvent(new Event('low-kingdoms-ready')); } export function canvasDimensions() { const parent = document.getElementById('game-canvas')?.parentElement; if (!parent) return new Float32Array(); const size = parent.getBoundingClientRect(); return new Float32Array([size.width, size.height, window.devicePixelRatio]); }"
+    inline_js = "export function announceReady() { window.dispatchEvent(new Event('low-kingdoms-ready')); } export function canvasDimensions() { const parent = document.getElementById('game-canvas')?.parentElement; if (!parent) return new Float32Array(); const size = parent.getBoundingClientRect(); const style = getComputedStyle(parent); const horizontal = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight); const vertical = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom); return new Float32Array([size.width - horizontal, size.height - vertical, window.devicePixelRatio]); }"
 )]
 extern "C" {
     #[wasm_bindgen(js_name = announceReady)]

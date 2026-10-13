@@ -1,19 +1,22 @@
 # Working in Low Kingdoms
 
 Low Kingdoms is a private Rust/Bevy application with a Bevy-independent headless rules engine.
-The client contains a title screen, About, and navigation. Milestone 1A implements rules only;
-its authoritative specification is [milestone-1a.md](docs/plans/milestone-1a.md).
-Do not introduce Milestone 1B integration, card content, abilities, or placeholder gameplay APIs.
-Do not add a Start, Play, or Continue control until gameplay is actually implemented and authorized.
+Milestone 1A owns match rules; its authoritative specification is
+[milestone-1a.md](docs/plans/milestone-1a.md). Milestone 1B authorizes the Bevy battle interface,
+minimal RON unit content, deterministic AI, and one local active save. Read the approved
+[Milestone 1B specification](docs/plans/milestone-1b.md) and
+[acceptance record](docs/plans/milestone-1b-acceptance.md). Do not introduce later mechanics,
+placeholder gameplay APIs, or additional product systems.
 
 ## Before editing
 
 1. Inspect `git status` and preserve unrelated work.
 2. Read this file, [STYLE_GUIDE.md](STYLE_GUIDE.md), and the instructions applicable to each edited directory.
 3. For `crates/client/`, read [its AGENTS.md](crates/client/AGENTS.md) explicitly.
-4. Read the applicable plan: [scaffold](docs/plans/scaffold.md) for presentation or
-   [Milestone 1A](docs/plans/milestone-1a.md) for rules, plus its
-   [acceptance record](docs/plans/milestone-1a-acceptance.md).
+4. Read the applicable approved plan and acceptance record: [Milestone 1B](docs/plans/milestone-1b.md)
+   for battles, [Milestone 1A](docs/plans/milestone-1a.md) for rules, and the
+   [scaffold](docs/plans/scaffold.md) for original bootstrap/navigation requirements.
+   For `crates/battle/`, explicitly read [its AGENTS.md](crates/battle/AGENTS.md).
 5. Apply an appropriate repository-local skill rather than inventing another workflow.
 
 The maintained skills are:
@@ -24,22 +27,28 @@ The maintained skills are:
 
 ## Package map
 
-| Location          | Responsibility                                                        |
-| ----------------- | --------------------------------------------------------------------- |
-| `apps/game`       | Thin executable entry point, package and binary `low-kingdoms`.       |
-| `crates/client`   | Application composition, screens, UI interaction, and platform edges. |
-| `crates/rules`    | Authoritative, deterministic, renderer-independent match rules.       |
-| `tools/xtask`     | Host-only command orchestration; never an application dependency.     |
-| `tools/web-tests` | Development-only browser tests against generated WASM bundles.        |
-| `web`             | Static canvas host, loader, and CSS; no separate menu implementation. |
-| `assets`          | Asset policy; no external game art or font files in this scaffold.    |
+| Location          | Responsibility                                                         |
+| ----------------- | ---------------------------------------------------------------------- |
+| `apps/game`       | Thin executable entry point, package and binary `low-kingdoms`.        |
+| `crates/client`   | Application composition, screens, UI interaction, and platform edges.  |
+| `crates/rules`    | Authoritative, deterministic, renderer-independent match rules.        |
+| `crates/battle`   | RON content, view-only AI, human sessions, and privileged save format. |
+| `tools/xtask`     | Host-only command orchestration; never an application dependency.      |
+| `tools/web-tests` | Development-only browser tests against generated WASM bundles.         |
+| `web`             | Static canvas host, loader, and CSS; no separate menu implementation.  |
+| `assets`          | Embedded prototype RON content and asset policy; no external game art. |
 
-The dependency direction is executable to client to Bevy.
+The executable depends on the client; the client depends on Bevy, battle, and rules.
+Battle depends on rules, RON, Serde, and JSON, with no direct or indirect Bevy dependency.
 The host tool must not pull in the renderer. Target-build the application packages for WASM, not the workspace.
 Use the same production screen/navigation plugins in native, WASM, and headless tests.
 Keep platform-specific work at `crates/client/src/platform/` and launch configuration at the application edge.
 Gameplay state and transitions belong in `crates/rules`; read its [AGENTS.md](crates/rules/AGENTS.md).
-It depends only on Serde/JSON, never on Bevy, the client, or host tools. Client integration is 1B.
+It depends only on Serde/JSON, never on Bevy, the client, battle, or host tools.
+UI and AI submit typed validated commands; do not duplicate combat or legality rules.
+Presentation uses only the human view and human-filtered events. AI receives only its own view,
+legal commands, and public definitions. Authoritative snapshots, replay logs, and seeds are
+privileged save/control data; never put them in player-facing UI, browser globals, or diagnostics.
 See [architecture](docs/architecture.md) for the implemented boundaries.
 
 ## Versions and dependencies
@@ -50,7 +59,8 @@ The exact Rust toolchain is in `rust-toolchain.toml`; workspace edition is 2024 
 Every package is unpublished and inherits workspace lints. Commit the application `Cargo.lock`.
 Use `--locked` after dependency resolution. Auxiliary pins are documented in [development](docs/development.md).
 The `wasm-bindgen-cli` version must match the resolved crate version; a mismatch is an error.
-Do not add dependencies for future gameplay or silently migrate the engine to fix an unrelated issue.
+Add dependencies only for implemented behavior; do not silently migrate the engine to fix an
+unrelated issue. Keep the RON prototype vanilla and small; do not invent card mechanics.
 Inspect host and WASM feature trees after feature/dependency changes.
 Production excludes `test-support`, WebGPU, developer/editor features, and native dynamic linking.
 
@@ -73,7 +83,8 @@ just check-all        # all mandatory gates, including rendering
 ```
 
 For focused iteration, use `cargo check --locked -p low-kingdoms-client`, then relevant tests.
-For rules changes, run `cargo test --locked -p low-kingdoms-rules`, its strict all-targets Clippy,
+For battle changes, run `cargo test --locked -p low-kingdoms-battle` plus its strict Clippy and WASM
+check. For rules changes, run `cargo test --locked -p low-kingdoms-rules`, its strict all-targets Clippy,
 and its `wasm32-unknown-unknown` check. `just check` includes rules tests/docs/lints;
 `just check-web` includes rules target compilation/linting alongside the application.
 Before committing a Rust/tooling change, run `just check` and the affected target/rendering gates.
@@ -100,12 +111,20 @@ Exercise real pointer, touch, and keyboard input, resize, high DPI, and the stat
 See [testing](docs/testing.md) for viewports, the read-only test bridge, and screenshot review.
 Do not automatically bless snapshots, suppress application errors, or turn missing GPUs into successful skips.
 Store screenshots, traces, logs, and measurements under ignored `evidence/`.
-Record checks as passed, failed, blocked, or not run in the active plan.
+Record checks as passed, failed, blocked, or not run in the active acceptance record.
+For 1B, exercise complete human-versus-AI matches, save/resume, actual touch scrolling/targeting,
+and the 375×667 minimum viewport. Keep the read-only test bridge limited to human-visible data.
+Use production interaction paths in tests; do not add privileged gameplay mutation hooks.
 An unavailable environment is a blocker to that check; keep the acceptance check in place.
 
 ## Scope and handoff
 
-Do not add saves, accounts, networking, analytics, runtime LLM services, editor tooling, or release automation.
+Milestone 1B permits one automatic local save slot only. Validate exact content/format/profile
+compatibility, preserve unfinished battles, and confirm replacement. Pause AI while inactive;
+retry storage failures without reapplying a successful gameplay command. Do not add accounts,
+networking, analytics, runtime LLM services, cloud saves, editor tooling, or release automation.
+Do not add artwork, abilities, action/upgrade cards, commanders, factions, campaign, deck-building,
+or advanced AI. Normal/Fast/Instant timing changes presentation only, not engine decisions.
 Do not assert a license for original game work or copy Retroglyph's license onto this application.
 Preserve third-party attribution in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 Do not commit, push, publish, deploy, change access, or perform destructive Git operations without authorization.

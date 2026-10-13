@@ -40,6 +40,7 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   retries: 0,
+  maxFailures: 1,
   timeout: 120_000,
   expect: { timeout: 60_000 },
   reporter: [
@@ -49,6 +50,7 @@ export default defineConfig({
   ],
   use: {
     browserName: "chromium",
+    channel: "chromium",
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
     launchOptions: {
@@ -62,6 +64,14 @@ export default defineConfig({
       name: "phone-portrait",
       use: {
         viewport: { width: 390, height: 844 },
+        hasTouch: true,
+        isMobile: true,
+      },
+    },
+    {
+      name: "phone-minimum",
+      use: {
+        viewport: { width: 375, height: 667 },
         hasTouch: true,
         isMobile: true,
       },

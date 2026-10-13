@@ -26,15 +26,16 @@ fn check_packages(project: &Project) -> Result<()> {
     let members = metadata["workspace_members"]
         .as_array()
         .ok_or_else(|| Failure::new("Cargo metadata did not contain workspace_members"))?;
-    if packages.len() != 4 || members.len() != 4 {
+    if packages.len() != 5 || members.len() != 5 {
         return Err(Failure::new(
-            "Workspace must have exactly its four implemented packages",
+            "Workspace must have exactly its five implemented packages",
         ));
     }
     for (name, relative) in [
         ("low-kingdoms", "apps/game/Cargo.toml"),
         ("low-kingdoms-client", "crates/client/Cargo.toml"),
         ("low-kingdoms-rules", "crates/rules/Cargo.toml"),
+        ("low-kingdoms-battle", "crates/battle/Cargo.toml"),
         ("xtask", "tools/xtask/Cargo.toml"),
     ] {
         let package = packages
@@ -73,6 +74,11 @@ fn check_packages(project: &Project) -> Result<()> {
                 || (name == "low-kingdoms" && dependency_name != "low-kingdoms-client")
                 || (name == "low-kingdoms-rules"
                     && !matches!(dependency_name, "serde" | "serde_json"))
+                || (name == "low-kingdoms-battle"
+                    && !matches!(
+                        dependency_name,
+                        "low-kingdoms-rules" | "ron" | "serde" | "serde_json"
+                    ))
             {
                 return Err(Failure::new(format!(
                     "Invalid package boundary: {name} depends on {dependency_name}"
@@ -91,6 +97,7 @@ fn check_documents(project: &Project) -> Result<()> {
         "THIRD_PARTY_NOTICES.md",
         "crates/client/AGENTS.md",
         "crates/rules/AGENTS.md",
+        "crates/battle/AGENTS.md",
         "assets/README.md",
         "docs/architecture.md",
         "docs/development.md",
@@ -100,6 +107,8 @@ fn check_documents(project: &Project) -> Result<()> {
         "docs/plans/scaffold.md",
         "docs/plans/milestone-1a.md",
         "docs/plans/milestone-1a-acceptance.md",
+        "docs/plans/milestone-1b.md",
+        "docs/plans/milestone-1b-acceptance.md",
     ] {
         let path = project.root.join(relative);
         if !path.is_file() {

@@ -19,7 +19,7 @@ Cargo commands used by verification and packaging use the committed lockfile.
 
 `tools/tool-versions.toml` is the auxiliary CLI pin authority. Browser-test package metadata and
 lockfile must agree with those pins. Rust's exact compiler policy is also reflected by the workspace
-`rust-version`; this scaffold does not claim an older untested compiler.
+`rust-version`; the repository does not claim an older untested compiler.
 
 Install rustup and the pinned Node distribution through their official installation instructions.
 If Just is unavailable, bootstrap with `cargo xtask setup`; setup installs the pinned project-local
@@ -58,8 +58,8 @@ Windows requires the Rust MSVC toolchain and corresponding Visual Studio build t
 
 The authoritative rules are in `docs/plans/milestone-1a.md`. The engine is independent of Bevy;
 its API and deterministic ordering are documented in `docs/architecture.md` and generated rustdoc.
-Injected anonymous unit definitions suffice to execute complete matches. No client integration
-or designed card library is included in 1A.
+Injected anonymous unit definitions suffice to execute complete rules tests. Milestone 1A stays
+content-agnostic; the separate battle library supplies Milestone 1B prototype content and sessions.
 
 ```sh
 cargo test --locked -p low-kingdoms-rules
@@ -71,7 +71,7 @@ just check-web
 ```
 
 The workspace gates include rules tests, Clippy, rustdoc, metadata, and crate-local instructions.
-The WASM gate checks/lints the rules library alongside the client and executable while excluding
+The WASM gate checks/lints the rules and battle libraries alongside the client and executable while excluding
 host tools. All existing CI jobs continue to use these commands; the native matrix executes the
 headless rules suite on Linux, macOS, and Windows. Renderer smoke gates remain in place.
 
@@ -79,7 +79,8 @@ headless rules suite on Linux, macOS, and Windows. Renderer smoke gates remain i
 with `game.apply(player, &command)`; inspect `game.view_for(player)` and filtered
 `events.for_player(player)`. Record `LoggedCommand` entries externally for `Game::replay`.
 Never deliver authoritative snapshots to player-facing code. Snapshot JSON and injected catalogs
-are sufficient for exact continuation; filesystem, database, and networking infrastructure are absent.
+are sufficient for exact continuation. Rules contain no filesystem/database/networking code; local
+1B save I/O lives at the client platform edge.
 
 ## Native and browser iteration
 
@@ -114,30 +115,147 @@ live in the tool; subprocess failure propagates rather than producing a successf
 The same overrides work through Just, for example `just dev-web --port 4200`.
 For `check-all --output PATH`, native and browser evidence go into `PATH/native/` and `PATH/web/`.
 
+Native smoke captures four scenes through `test-support`: Title, Mulligan, an actually deployed
+battlefield, and Results. Each scene receives an isolated save directory and a bounded capture
+before exit. For direct diagnostic launches, use `--screenshot PATH --scene title|mulligan|battle|results`;
+these are test-support options, not production menu or privileged gameplay APIs. Linux virtual-display
+runs must provide a window manager/focus (CI uses Openbox inside Xvfb), otherwise AI correctly stays
+paused. Inspect all four captures rather than treating completed files as visual approval.
+
 Use `cargo check --locked -p low-kingdoms-client` for a focused type check, then focused tests and
 `just check`. Application changes affecting WASM also need `just check-web`. Presentation/startup
 changes need the affected renderer smoke checks and screenshot inspection.
 
+## Prototype battle iteration
+
+Read [Milestone 1B](plans/milestone-1b.md) and [its acceptance record](plans/milestone-1b-acceptance.md)
+for the approved scope and actual verification. The same Bevy gameplay systems run natively and in
+WASM. Select Play, keep/mulligan the opening hand, then confirm up to two starting resources.
+Inspect hand cards before Play; select a ready friendly unit and Attack before selecting a target.
+Pass is persistent and Claim Initiative is in the secondary menu. Round-two onward resourcing is
+inline. Results offer Play Again with a fresh seed or Main Menu.
+
+Compact browser layouts use touch-selectable cards, scrollable unit rows, a hand tray, and overlays.
+Swiping reveals offscreen targets while retaining attacker selection. The supported minimum is
+375×667 CSS pixels; desktop and landscape layouts adapt automatically, including resize/DPR changes.
+AI timing is Normal 750 ms, Fast 150 ms, or Instant zero delay; inactive tabs/windows pause execution.
+Timing never changes deterministic choices. The event log retains the last 256 filtered events.
+
+```sh
+cargo test --locked -p low-kingdoms-battle
+cargo clippy --locked -p low-kingdoms-battle --all-targets -- -D warnings
+cargo check --locked -p low-kingdoms-battle --target wasm32-unknown-unknown
+cargo test --locked -p low-kingdoms-client
+just check
+just check-web
+just smoke-native
+just smoke-web
+```
+
+The maintained Playwright matrix uses the supported full `channel: "chromium"` browser for real
+multi-tab focus/visibility checks. Setup installs the pinned browser; a working headless shell is
+not a substitute for the full-channel background scenarios. If local process/UNIX-socket policy
+blocks Chromium's ProcessSingleton, record the full smoke as blocked and verify on a provisioned
+runner. Do not disable the background policy or replace actual tab activity with a mocked field.
+The full 55-case smoke is bounded to 4200 seconds (browser CI job 90 minutes). Complete matches
+allow 600 seconds, with only `phone-landscape-dpr2` allowed 1200 seconds. The same-source push
+passed all 55, but its separate PR exhausted the previous scenario budget after a valid full match
+and fresh restart, interrupting the final normal 60-second screen poll after only 925.5 ms. The
+bounded timing correction preserves every assertion and zero retries. Ordinary cases remain
+120 seconds and expect waits 60 seconds; no product rule or game source changes for this recovery.
+
+Headless battle tests cover content, view-only AI, complete simulations, and exact saved continuation.
+Client tests use production command/scheduling/presentation paths. Browser tests use real compiled
+WASM and pointer/touch input; they do not install an HTML gameplay mock or a writable game bridge.
+Inspect actual captures before claiming the changed interface is usable. Controlled test seeds are
+internal test configuration; production fresh matches use platform entropy.
+
+## Prototype content
+
+`assets/content/cards.ron` contains a Serde-compatible list of named vanilla unit records:
+
+```ron
+[
+    (id: (1), name: "Infantry", cost: 1, power: 2, health: 2),
+    (id: (2), name: "Archer", cost: 2, power: 3, health: 2),
+]
+```
+
+`assets/content/decks.ron` contains exactly two records, each with twenty `DefinitionId` references
+and a positive `stronghold_health`. For example, one record's shape is:
+
+```text
+(cards: [(1), (2), ... exactly twenty entries ...], stronghold_health: 30)
+```
+
+The abbreviated deck example is explanatory, not valid fixture data. Use the committed full RON
+files and `Content::parse` tests. All six prototype units have only name, ID, cost, Power, and Health;
+no card text, abilities, factions, keywords, or extra types are accepted. Costs and Power use `u32`
+and may be zero; Health and stronghold Health must be positive. Unknown fields, empty names/catalogs,
+duplicate IDs, wrong deck counts/lengths, and unknown references are rejected before match creation.
+
+The catalog is ID-sorted; deck input order is preserved. `Content::load` embeds the files with
+`include_str!`, providing identical native/browser content without runtime file access or fetches.
+The exact canonical compatibility signature includes names, all statistics, deck references/order,
+and strongholds. RON whitespace/definition ordering does not invalidate a save; changing its
+meaningful content does. Parse once when initializing the client and reuse validated content.
+
+## Local saves
+
+Milestone 1B has one automatic active slot. Accepted human/AI commands and automatic phase changes
+save the current authoritative session, including private pending decisions. Title offers Resume
+Battle for a compatible unfinished save. Starting a new battle asks before replacement; Main Menu
+preserves unfinished progress. Results clear resumable progress; a validated finished record left
+by failed cleanup is refused as a resume target.
+
+| Platform         | Active slot                                                                                                        |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Browser          | Origin-scoped `localStorage` key `low-kingdoms.active.v1`.                                                         |
+| Windows          | `%LOCALAPPDATA%/low-kingdoms/active-v1.json`.                                                                      |
+| macOS            | `$HOME/Library/Application Support/low-kingdoms/active-v1.json`.                                                   |
+| Linux/other Unix | Absolute `$XDG_DATA_HOME/low-kingdoms/active-v1.json`, otherwise `$HOME/.local/share/low-kingdoms/active-v1.json`. |
+
+Native replacement writes/syncs a sibling temporary file, then replaces the active slot. It never
+stores saves relative to the current working directory. Browser storage is scoped to protocol,
+host, and port: the development server and deployed Pages site have separate slots. Browser privacy
+settings, storage clearing, or quota limits can prevent persistence. There are no accounts, cloud
+copies, database, or multiple-slot management.
+
+The version-1 session envelope contains exact content identity, human/opponent roles, AI profile
+version/stateless state, seed, revision, phase, full rules snapshot, ordered successful command log,
+and bounded human-filtered history. The client may add versioned UI preferences outside session text.
+Restore checks the engine snapshot and replays commands, verifies deterministic AI decisions, and
+compares exact continuation state. Unsupported format/profile/roles/content and inconsistent saves
+are rejected. No migration is implemented. Protective limits are 2 MiB and 4096 successful commands;
+the visible history cap of 256 events does not truncate authoritative replay.
+
+Treat save text and seeds as privileged: they contain or reconstruct hidden cards. Do not expose
+or print them through UI, the read-only test bridge, or error logs. Local ownership is not an
+anti-cheat boundary. Missing/corrupt/incompatible saves show recovery without constructing a partial
+match. Storage failures preserve the last valid in-memory state and old slot where possible; retry
+writes the current session and cannot reapply the successful game command. The UI surfaces failures
+and pauses the affected path rather than silently continuing to overwrite progress.
+
 ## Command map
 
-| Command             | Behavior                                                             |
-| ------------------- | -------------------------------------------------------------------- |
-| `just doctor`       | Read-only tool/target/prerequisite report.                           |
-| `just setup`        | Explicit pinned project-tool and browser dependency setup.           |
-| `just dev`          | Build/run native from the repository root.                           |
-| `just dev-web`      | Rebuild development WASM and serve HTTP, default port 4173.          |
-| `just build`        | Package native release output in `dist/native/`.                     |
-| `just build-web`    | Package production static output in `dist/web/`, without test hooks. |
-| `just fmt`          | Format Rust and selected maintained text/config formats.             |
-| `just fmt-check`    | Check formatting without changes.                                    |
-| `just clippy`       | Strict workspace host lints, including tests and tooling.            |
-| `just test`         | Host unit/integration tests and doctests; no GPU required.           |
-| `just doc`          | First-party documentation with warnings denied.                      |
-| `just check`        | Formatting, structural checks, host lints, tests, and docs.          |
-| `just check-web`    | Compile/lint the application and rules packages for WASM.            |
-| `just smoke-native` | Actual native renderer, completed screenshot, bounded failure.       |
-| `just smoke-web`    | Generated bundles, real Chromium input, screenshots, and traces.     |
-| `just check-all`    | All mandatory gates, including native/browser rendering.             |
+| Command             | Behavior                                                                  |
+| ------------------- | ------------------------------------------------------------------------- |
+| `just doctor`       | Read-only tool/target/prerequisite report.                                |
+| `just setup`        | Explicit pinned project-tool and browser dependency setup.                |
+| `just dev`          | Build/run native from the repository root.                                |
+| `just dev-web`      | Rebuild development WASM and serve HTTP, default port 4173.               |
+| `just build`        | Package native release output in `dist/native/`.                          |
+| `just build-web`    | Package production static output in `dist/web/`, without test hooks.      |
+| `just fmt`          | Format Rust and selected maintained text/config formats.                  |
+| `just fmt-check`    | Check formatting without changes.                                         |
+| `just clippy`       | Strict workspace host lints, including tests and tooling.                 |
+| `just test`         | Host unit/integration tests and doctests; no GPU required.                |
+| `just doc`          | First-party documentation with warnings denied.                           |
+| `just check`        | Formatting, structural checks, host lints, tests, and docs.               |
+| `just check-web`    | Compile/lint the application, battle, and rules packages for WASM.        |
+| `just smoke-native` | Actual native title/mulligan/battle/results screenshots, bounded failure. |
+| `just smoke-web`    | Generated bundles, real Chromium input, screenshots, and traces.          |
+| `just check-all`    | All mandatory gates, including native/browser rendering.                  |
 
 ## Files, assets, and rendering features
 
@@ -149,9 +267,10 @@ Keep selected, visually reviewed reference captures in `docs/references/rendered
 environment and review notes in its README. They supplement the ignored per-run `evidence/`
 artifacts and are maintained manual references, not an automatic cross-backend pixel baseline.
 
-Initial UI uses Bevy's embedded default font. No loose font/art files are needed.
+UI uses Bevy's embedded default font. Prototype RON is embedded into the battle library; no loose
+font/art/content files are required at runtime.
 [The asset policy](../assets/README.md) and [notices](../THIRD_PARTY_NOTICES.md) govern later additions.
-Current distributions include the notices and no runtime asset directory; `assets/README.md` is
+Distributions include the notices and no loose runtime asset directory; `assets/README.md` is
 repository policy, not a shipped asset. Extend packaging when an implemented feature first needs
 loose assets. Source paths must not depend on an absolute developer-machine directory.
 WASM binding generation emits JavaScript/WASM/snippets and disables unused TypeScript declarations.
@@ -199,7 +318,7 @@ The expected project URL is `https://matanlurey.github.io/low-kingdoms/`. Relati
 paths preserve the project subpath; GitHub Pages supplies HTTPS and the WASM content type. Only
 production files and the third-party notices are published, with no read-only test bridge.
 
-After deploying, CI uses the exact `page_url` returned by GitHub and runs real Chromium on all four
+After deploying, CI uses the exact `page_url` returned by GitHub and runs real Chromium on all five
 configured viewports. It checks resources, application readiness, captured pixels, CSS/DPR bounds,
 absence of the bridge, and keyboard About/Back navigation. These failures fail the deployment job;
 the uploaded `pages-browser-evidence` artifact retains images, errors, and traces. Record the run,

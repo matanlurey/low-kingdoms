@@ -25,8 +25,12 @@ pub(crate) struct ClientPlugin;
 
 impl Plugin for ClientPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins((ScreensPlugin, UiInteractionPlugin))
-            .add_systems(Startup, spawn_camera);
+        app.add_plugins((
+            crate::gameplay::BattlePlugin,
+            ScreensPlugin,
+            UiInteractionPlugin,
+        ))
+        .add_systems(Startup, spawn_camera);
     }
 }
 

@@ -3027,10 +3027,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "low-kingdoms-battle"
+version = "0.1.0"
+dependencies = [
+ "low-kingdoms-rules",
+ "ron",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "low-kingdoms-client"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "getrandom 0.3.4",
+ "low-kingdoms-battle",
+ "low-kingdoms-rules",
+ "serde",
+ "serde_json",
  "wasm-bindgen",
 ]
 

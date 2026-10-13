@@ -1,0 +1,17 @@
+[package]
+name = "low-kingdoms-battle"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+repository.workspace = true
+description = "Low Kingdoms prototype content, deterministic opponent, and resumable battle sessions"
+
+[dependencies]
+low-kingdoms-rules.workspace = true
+ron.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

@@ -343,6 +343,10 @@ for (const [routeName, url] of routes) {
     await page.keyboard.press("Tab");
     await expect
       .poll(async () => (await bridge(page))?.focusedControl)
+      .toBe("play");
+    await page.keyboard.press("Tab");
+    await expect
+      .poll(async () => (await bridge(page))?.focusedControl)
       .toBe("about");
     await expect
       .poll(async () => (await bridge(page))?.focusVisible)
@@ -368,18 +372,23 @@ for (const [routeName, url] of routes) {
     await page.keyboard.press("Shift+Tab");
     await expect
       .poll(async () => (await bridge(page))?.focusedControl)
+      .toBe("play");
+    await page.keyboard.press("Tab");
+    await expect
+      .poll(async () => (await bridge(page))?.focusedControl)
       .toBe("about");
     await page.keyboard.press("Enter");
     await waitForScreen(page, "about");
     const about = await assertLayout(page);
     expect(about.texts.map((item) => item.text)).toContain(
-      "Early development build. Gameplay is not implemented.",
+      "Playable battle prototype against a basic AI.",
     );
     await capture(page, testInfo, "about", about);
     await page.keyboard.press("Escape");
     await waitForScreen(page, "title");
     await page.keyboard.press("Escape");
     await waitForScreen(page, "title");
+    await page.keyboard.press("Tab");
     await page.keyboard.press("Tab");
     await page.keyboard.press("Space");
     await waitForScreen(page, "about");
@@ -461,6 +470,7 @@ test("production bundle renders without diagnostic bridge", async ({
   await assertCanvasLayout(page);
   await capture(page, testInfo, "production-title");
   await page.locator("#game-canvas").focus();
+  await page.keyboard.press("Tab");
   await page.keyboard.press("Tab");
   const focusedTitle = await capture(
     page,

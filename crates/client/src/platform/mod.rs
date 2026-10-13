@@ -6,6 +6,12 @@ use bevy::window::WindowResizeConstraints;
 #[cfg(target_arch = "wasm32")]
 mod browser;
 
+#[expect(
+    clippy::redundant_pub_crate,
+    reason = "Storage is shared privately with the client session controller."
+)]
+pub(crate) mod storage;
+
 #[derive(Resource)]
 #[expect(
     clippy::redundant_pub_crate,

@@ -185,7 +185,7 @@ pub(crate) fn smoke(project: &Project, options: &Options) -> Result<()> {
         .env("LOW_KINGDOMS_PRODUCTION_URL", format!("{base}production/"))
         .env("LOW_KINGDOMS_EVIDENCE_DIR", &evidence);
     let mut child = process::OwnedChild::logged(&mut tests, &evidence.join("playwright.log"))?;
-    child.wait(&tests, options.timeout.unwrap_or(Duration::from_mins(15)))?;
+    child.wait(&tests, options.timeout.unwrap_or(Duration::from_mins(70)))?;
     println!(
         "Browser checks completed; inspect retained screenshots and traces in {}",
         evidence.display()

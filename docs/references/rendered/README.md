@@ -28,3 +28,67 @@ Native environment: Linux 6.18.44 x86_64 with glibc 2.39, Rust 1.98.0, Xvfb 1280
 | [web-production-title-844x390-dpr2.png](web-production-title-844x390-dpr2.png)   | 844×390        | 2   | Production landscape title             |
 
 Regenerate renderer evidence with `just smoke-native` and `just smoke-web`, inspect the images and environment logs under `evidence/`, and explicitly select replacement references after the checks pass. These files are a reviewed visual record. Verification uses live geometry, real input, and captured-pixel assertions; replacing a reference requires manual review.
+
+## Milestone 1B battle references
+
+These battle captures were manually inspected on 2026-10-13. They supplement the original scaffold
+references above. They establish readable pixels and the particular interactions described here;
+the [Milestone 1B acceptance record](../../plans/milestone-1b-acceptance.md) separately records the
+complete browser matrix and all verification outcomes.
+
+The four native captures come from the successful native-render job in
+[Actions run 38372317206](https://github.com/matanlurey/low-kingdoms/actions/runs/38372317206),
+code checkpoint `71202a6bd32a7e726b38f4f0679554347c22bd75`, artifact `11800026645`. Environment: Ubuntu 24.04,
+Xvfb/Openbox at 1280×720/DPR 1, Mesa 25.2.8, and llvmpipe LLVM 20.1.2 Vulkan CPU rendering.
+All four were inspected by the coordinating worker; text, cards, counters, and controls were
+readable without obvious clipping.
+
+The early web battle captures come from real mouse/touch interaction with the generated WASM client using
+official Chromium 153.0.8010.12 headless shell, Playwright 1.63.0, and ANGLE/SwiftShader on
+Ubuntu 24.04.3. Screenshots are in CSS pixels, at DPR 1. These particular landscape frames used
+a live orientation/viewport change; the maintained suite separately verifies landscape DPR 2.
+The minimum-size Hand tray leaves Pass and the other action controls reachable. Resources expose
+the human's card identities and both players' public counts. The portrait Resume frame restored
+round 2, revision 10, and the exact pending human regroup decision after a real refresh.
+The coordinating worker inspected every selected frame. Mobile frames use Chromium touch
+emulation and do not establish physical-device or Safari behavior.
+
+The corrected code at `3cf7d0f050f7966c7ee5edd5d3750a8d47a09f92` also passed complete touch matches
+at 390×844, 375×667, and 844×390/DPR 2 under the same official shell runtime. Each reached
+Defeat in round 6, restarted with a fresh six-card hand, and returned to Title with Resume available.
+The coordinating worker inspected the current crowded-field targeting, persistent damage,
+minimum-size results, landscape combat/results/menu, and rotated portrait frames. The additional
+`dpr2` references below use DPR 2; other additional references use DPR 1. A live DPR 2→1→2
+transition passed canvas/view assertions. Its capture helper restores Playwright's configured
+metrics, so the post-capture JSON is not retained evidence of DPR 1.
+
+The corrected rotated Mulligan frame at 667×375/DPR 1 was also inspected. Its first card begins
+inside the scroll origin; real touch input reached both end cards on root and subpath URLs.
+Auto margins preserve horizontal centering when the hand fits, while overflowing rows and
+wrapped content begin at a reachable edge. The acceptance record includes the actual Bevy layout
+regressions and the subsequent maintained CI outcome.
+
+The corrected native Mulligan capture was reviewed and replaced after the alignment fix. The
+other three current native PNGs are byte-identical to the earlier reviewed references; the
+coordinating worker verified that equality. The [acceptance record](../../plans/milestone-1b-acceptance.md) retains
+the separately required maintained full-Chromium matrix status.
+
+| Screenshot                                                                             | Logical canvas | Captured state                                          |
+| -------------------------------------------------------------------------------------- | -------------- | ------------------------------------------------------- |
+| [milestone-1b-native-title-1280x720.png](milestone-1b-native-title-1280x720.png)       | 1280×720       | Native Title                                            |
+| [milestone-1b-native-mulligan-1280x720.png](milestone-1b-native-mulligan-1280x720.png) | 1280×720       | Six-card opening hand and mulligan controls             |
+| [milestone-1b-native-battle-1280x720.png](milestone-1b-native-battle-1280x720.png)     | 1280×720       | Battlefield, hand, counters, actions, and log           |
+| [milestone-1b-native-results-1280x720.png](milestone-1b-native-results-1280x720.png)   | 1280×720       | Terminal result and restart/menu controls               |
+| [milestone-1b-web-hand-375x667.png](milestone-1b-web-hand-375x667.png)                 | 375×667        | Compact Hand tray with persistent footer                |
+| [milestone-1b-web-preview-375x667.png](milestone-1b-web-preview-375x667.png)           | 375×667        | Card inspection and contextual Play                     |
+| [milestone-1b-web-deployment-375x667.png](milestone-1b-web-deployment-375x667.png)     | 375×667        | Deployed exhausted unit                                 |
+| [milestone-1b-web-resources-844x390.png](milestone-1b-web-resources-844x390.png)       | 844×390        | Resource inspection panel                               |
+| [milestone-1b-web-log-844x390.png](milestone-1b-web-log-844x390.png)                   | 844×390        | Chronological event log panel                           |
+| [milestone-1b-web-resume-390x844.png](milestone-1b-web-resume-390x844.png)             | 390×844        | Restored pending regroup after refresh                  |
+| [milestone-1b-web-hand-844x390-dpr2.png](milestone-1b-web-hand-844x390-dpr2.png)       | 844×390        | Hand tray and persistent footer at DPR 2                |
+| [milestone-1b-web-regroup-844x390-dpr2.png](milestone-1b-web-regroup-844x390-dpr2.png) | 844×390        | Regroup after a quick footer Pass at DPR 2              |
+| [milestone-1b-web-combat-844x390-dpr2.png](milestone-1b-web-combat-844x390-dpr2.png)   | 844×390        | Persistent unit damage and exhaustion at DPR 2          |
+| [milestone-1b-web-targeting-390x844.png](milestone-1b-web-targeting-390x844.png)       | 390×844        | Offscreen enemy revealed through actual touch scrolling |
+| [milestone-1b-web-results-390x844.png](milestone-1b-web-results-390x844.png)           | 390×844        | Complete portrait match result                          |
+| [milestone-1b-web-results-375x667.png](milestone-1b-web-results-375x667.png)           | 375×667        | Complete minimum-size match result                      |
+| [milestone-1b-web-mulligan-667x375.png](milestone-1b-web-mulligan-667x375.png)         | 667×375        | Reachable opening cards after minimum-phone rotation    |
