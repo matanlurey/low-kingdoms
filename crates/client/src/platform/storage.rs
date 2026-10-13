@@ -30,6 +30,8 @@ pub(crate) trait Store: Send + Sync {
 pub(crate) enum StorageError {
     Unavailable(String),
     Read(String),
+    #[cfg(not(target_arch = "wasm32"))]
+    Encoding,
     Write(String),
     Clear(String),
     Quota,
@@ -41,6 +43,8 @@ impl fmt::Display for StorageError {
         match self {
             Self::Unavailable(reason) => write!(f, "Local saves are unavailable: {reason}"),
             Self::Read(reason) => write!(f, "Could not read the saved battle: {reason}"),
+            #[cfg(not(target_arch = "wasm32"))]
+            Self::Encoding => f.write_str("The saved battle has damaged text encoding."),
             Self::Write(reason) => write!(f, "Could not save the battle: {reason}"),
             Self::Clear(reason) => write!(f, "Could not clear the saved battle: {reason}"),
             Self::Quota => f.write_str("Local storage is full; free some space and retry saving."),

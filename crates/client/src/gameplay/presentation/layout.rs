@@ -126,6 +126,9 @@ fn mulligan(world: &mut World, presentation: &mut Presentation, root: Entity, la
     );
     add_control(world, presentation, footer, Control::MainMenu);
     if layout.landscape {
+        world
+            .entity_mut(pane)
+            .insert(ScrollPane { horizontal: true });
         world.entity_mut(pane).insert(Node {
             flex_grow: 1.0,
             min_height: px(0),

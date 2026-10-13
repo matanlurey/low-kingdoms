@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use low_kingdoms_battle::content::CardDefinition;
+use low_kingdoms_battle::content::{CardDefinition, Content};
 use low_kingdoms_rules::{
     command::{AttackTarget, Command},
     engine::Game,
@@ -269,5 +269,58 @@ fn same_panel_reconciliation_preserves_overlay_scroll() {
             .y
             .to_bits(),
         60.0_f32.to_bits()
+    );
+}
+
+#[test]
+fn opening_hand_inspection_has_correct_stats_without_a_play_control_or_wrong_zone() {
+    let (mut app, _) = fixture();
+    let content = Content::load().expect("embedded content");
+    let definitions = content
+        .cards()
+        .iter()
+        .map(CardDefinition::unit_definition)
+        .collect();
+    let (game, _) = Game::new(content.config(42), definitions).expect("opening hand");
+    let card = game.view_for(PlayerId::Zero).hand[0];
+    let definition = content
+        .cards()
+        .iter()
+        .find(|definition| definition.id == card.definition)
+        .expect("definition");
+    project(&mut app, &game);
+    {
+        let mut battle = app.world_mut().resource_mut::<Battle>();
+        battle.catalog = content.cards().to_vec();
+        battle.selected = Some(card.id);
+        battle.panel = crate::gameplay::Panel::Inspect;
+    }
+    app.world_mut()
+        .resource_mut::<NextState<Screen>>()
+        .set(Screen::Mulligan);
+    app.update();
+    app.update();
+    let texts = app
+        .world_mut()
+        .query::<&Text>()
+        .iter(app.world())
+        .map(|text| text.0.clone())
+        .collect::<Vec<_>>();
+    assert!(texts.iter().any(|text| text == &definition.name));
+    assert!(
+        texts
+            .iter()
+            .any(|text| text.contains(&format!("Maximum Health {}", definition.health)))
+    );
+    assert!(
+        !texts
+            .iter()
+            .any(|text| text.contains("resource or discard zone"))
+    );
+    assert!(
+        !app.world_mut()
+            .query::<&Control>()
+            .iter(app.world())
+            .any(|control| *control == Control::PlayUnit)
     );
 }

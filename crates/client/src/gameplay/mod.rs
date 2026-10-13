@@ -203,6 +203,14 @@ fn load(runtime: &mut Runtime, battle: &mut Battle) {
     };
     let data = match store.read() {
         Ok(data) => data,
+        #[cfg(not(target_arch = "wasm32"))]
+        Err(error @ storage::StorageError::Encoding) => {
+            runtime.loaded = true;
+            runtime.suspended = true;
+            battle.resume_available = false;
+            battle.notification = error.to_string();
+            return;
+        }
         Err(error) => {
             fail(battle, error.to_string());
             return;

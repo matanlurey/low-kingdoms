@@ -3,8 +3,10 @@ use bevy::{
     input::{
         ButtonState, InputPlugin,
         keyboard::{Key, KeyboardInput},
+        mouse::MouseButtonInput,
     },
     input_focus::{InputDispatchPlugin, InputFocus, InputFocusPlugin, InputFocusVisible},
+    math::Affine2,
     prelude::*,
     state::app::StatesPlugin,
     window::PrimaryWindow,
@@ -47,7 +49,32 @@ fn control_entity(app: &mut App, control: Control) -> Entity {
 
 fn press_control(app: &mut App, control: Control) {
     let entity = control_entity(app, control);
-    *app.world_mut().get_mut::<Interaction>(entity).unwrap() = Interaction::Pressed;
+    // These headless tests supply a hit region; browser tests verify the rendered geometry.
+    app.world_mut().entity_mut(entity).insert((
+        ComputedNode {
+            size: Vec2::new(100.0, 52.0),
+            inverse_scale_factor: 1.0,
+            ..default()
+        },
+        UiGlobalTransform::from(Affine2::from_translation(Vec2::new(100.0, 100.0))),
+        InheritedVisibility::VISIBLE,
+    ));
+    let window = app
+        .world_mut()
+        .query_filtered::<Entity, With<PrimaryWindow>>()
+        .single(app.world())
+        .unwrap();
+    app.world_mut()
+        .get_mut::<Window>(window)
+        .unwrap()
+        .set_cursor_position(Some(Vec2::new(100.0, 100.0)));
+    for state in [ButtonState::Pressed, ButtonState::Released] {
+        app.world_mut().write_message(MouseButtonInput {
+            button: MouseButton::Left,
+            state,
+            window,
+        });
+    }
     app.update();
     app.update();
 }

@@ -1,16 +1,21 @@
 use bevy::{
     app::AppExit,
     ecs::system::SystemParam,
+    input::touch::{Touch, TouchInput, TouchPhase},
     input_focus::{
         FocusCause, InputFocus, InputFocusVisible,
         tab_navigation::{TabIndex, TabNavigationPlugin},
     },
     prelude::*,
+    ui::ComputedStackIndex,
 };
 
 use crate::screens::{Screen, ScreenPanel};
 
 pub(crate) mod theme;
+
+#[cfg(test)]
+mod input_tests;
 
 #[derive(Component, Clone, Copy, Debug, Eq, PartialEq)]
 #[expect(
@@ -215,7 +220,65 @@ struct Gesture {
     previous: Option<Vec2>,
     pane: Option<Entity>,
     dragged: bool,
+    empty: bool,
+    pointer: Option<Pointer>,
+    release_position: Option<Vec2>,
 }
+
+#[derive(Clone, Copy)]
+enum Pointer {
+    Mouse,
+    Touch(u64),
+}
+
+impl Pointer {
+    fn position(self, window: &Window, touches: &Touches) -> Option<Vec2> {
+        match self {
+            Self::Mouse => window.cursor_position(),
+            Self::Touch(id) => touches
+                .get_pressed(id)
+                .or_else(|| touches.get_released(id))
+                .map(Touch::position),
+        }
+    }
+
+    fn started(self, mouse: &ButtonInput<MouseButton>, touches: &Touches) -> bool {
+        match self {
+            Self::Mouse => mouse.just_pressed(MouseButton::Left),
+            Self::Touch(id) => touches.just_pressed(id),
+        }
+    }
+
+    fn released(self, mouse: &ButtonInput<MouseButton>, touches: &Touches) -> bool {
+        match self {
+            Self::Mouse => mouse.just_released(MouseButton::Left),
+            Self::Touch(id) => touches.just_released(id),
+        }
+    }
+}
+
+type OverlayNodes<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static crate::gameplay::presentation::OverlayRoot,
+        &'static ComputedNode,
+        &'static UiGlobalTransform,
+    ),
+>;
+
+type ScrollPanes<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static ComputedNode,
+        &'static UiGlobalTransform,
+        &'static crate::gameplay::presentation::ScrollPane,
+        &'static mut ScrollPosition,
+    ),
+>;
 
 #[derive(SystemParam)]
 struct ScrollInput<'w, 's> {
@@ -223,20 +286,11 @@ struct ScrollInput<'w, 's> {
     mouse: Res<'w, ButtonInput<MouseButton>>,
     touches: Res<'w, Touches>,
     wheel: MessageReader<'w, 's, bevy::input::mouse::MouseWheel>,
+    touch_events: MessageReader<'w, 's, TouchInput>,
     gesture: ResMut<'w, Gesture>,
-    panes: Query<
-        'w,
-        's,
-        (
-            Entity,
-            &'static ComputedNode,
-            &'static UiGlobalTransform,
-            &'static crate::gameplay::presentation::ScrollPane,
-            &'static mut ScrollPosition,
-        ),
-    >,
+    panes: ScrollPanes<'w, 's>,
     parents: Query<'w, 's, &'static ChildOf>,
-    overlays: Query<'w, 's, Entity, With<crate::gameplay::presentation::OverlayRoot>>,
+    overlays: OverlayNodes<'w, 's>,
 }
 
 fn scroll_input(data: ScrollInput) {
@@ -245,35 +299,60 @@ fn scroll_input(data: ScrollInput) {
         mouse,
         touches,
         mut wheel,
+        mut touch_events,
         mut gesture,
         mut panes,
         parents,
         overlays,
     } = data;
-    let position = touches
-        .first_pressed_position()
-        .or_else(|| window.cursor_position());
-    let started = mouse.just_pressed(MouseButton::Left) || touches.any_just_pressed();
-    if started {
-        gesture.origin = position;
-        gesture.previous = position;
-        gesture.dragged = false;
-        gesture.pane = position.and_then(|position| {
-            panes
+    if gesture.pointer.is_none() {
+        let contact = touches
+            .iter_just_pressed()
+            .min_by_key(|touch| touch.id())
+            .map(|touch| (Pointer::Touch(touch.id()), touch.start_position()))
+            .or_else(|| {
+                mouse
+                    .just_pressed(MouseButton::Left)
+                    .then(|| {
+                        window
+                            .cursor_position()
+                            .map(|position| (Pointer::Mouse, position))
+                    })
+                    .flatten()
+            });
+        if let Some((pointer, origin)) = contact {
+            gesture.pointer = Some(pointer);
+            gesture.origin = Some(origin);
+            gesture.previous = Some(origin);
+            gesture.dragged = false;
+            gesture.pending = None;
+            gesture.release_position = None;
+            gesture.pane = panes
                 .iter()
                 .filter(|(entity, node, transform, _, _)| {
-                    if !active_surface(*entity, &parents, &overlays) {
-                        return false;
-                    }
-                    let center = transform.translation * node.inverse_scale_factor();
-                    Rect::from_center_size(center, node.size() * node.inverse_scale_factor())
-                        .contains(position)
+                    active_surface(*entity, &parents, &overlays, origin)
+                        && logical_bounds(node, transform).contains(origin)
                 })
                 .min_by_key(|(_, node, _, _, _)| (node.size().x * node.size().y).to_bits())
-                .map(|(entity, ..)| entity)
-        });
+                .map(|(entity, ..)| entity);
+        }
     }
-    if (mouse.pressed(MouseButton::Left) || touches.iter().next().is_some())
+    for event in touch_events.read() {
+        if matches!(gesture.pointer, Some(Pointer::Touch(id)) if id == event.id)
+            && event.phase == TouchPhase::Ended
+        {
+            gesture.release_position = Some(event.position);
+        }
+    }
+    let position = gesture.pointer.map_or_else(
+        || window.cursor_position(),
+        |pointer| {
+            gesture
+                .release_position
+                .or_else(|| pointer.position(&window, &touches))
+        },
+    );
+    if gesture.pointer.is_some()
         && let Some(position) = position
     {
         if gesture
@@ -295,10 +374,20 @@ fn scroll_input(data: ScrollInput) {
         }
         gesture.previous = Some(position);
     }
+    scroll_wheel(&mut wheel, position, &mut panes, &parents, &overlays);
+}
+
+fn scroll_wheel(
+    wheel: &mut MessageReader<bevy::input::mouse::MouseWheel>,
+    position: Option<Vec2>,
+    panes: &mut ScrollPanes,
+    parents: &Query<&ChildOf>,
+    overlays: &OverlayNodes,
+) {
     for event in wheel.read() {
         if let Some(position) = position {
-            for (entity, node, transform, pane, mut scroll) in &mut panes {
-                if !active_surface(entity, &parents, &overlays) {
+            for (entity, node, transform, pane, mut scroll) in panes.iter_mut() {
+                if !active_surface(entity, parents, overlays, position) {
                     continue;
                 }
                 let center = transform.translation * node.inverse_scale_factor();
@@ -325,34 +414,47 @@ fn scroll_input(data: ScrollInput) {
 fn active_surface(
     mut entity: Entity,
     parents: &Query<&ChildOf>,
-    overlays: &Query<Entity, With<crate::gameplay::presentation::OverlayRoot>>,
+    overlays: &OverlayNodes,
+    position: Vec2,
 ) -> bool {
-    if overlays.is_empty() {
-        return true;
-    }
     loop {
         if overlays.get(entity).is_ok() {
             return true;
         }
         let Ok(parent) = parents.get(entity) else {
-            return false;
+            break;
         };
         entity = parent.parent();
     }
+    overlays.iter().all(|(_, overlay, node, transform)| {
+        !overlay.modal && !logical_bounds(node, transform).contains(position)
+    })
+}
+
+fn logical_bounds(node: &ComputedNode, transform: &UiGlobalTransform) -> Rect {
+    Rect::from_center_size(
+        transform.translation * node.inverse_scale_factor(),
+        node.size() * node.inverse_scale_factor(),
+    )
 }
 
 type PointerControls<'w, 's> = Query<
     'w,
     's,
-    (Entity, &'static Control, &'static Interaction),
     (
-        Changed<Interaction>,
-        Without<crate::gameplay::presentation::DisabledControl>,
+        Entity,
+        &'static Control,
+        &'static ComputedNode,
+        &'static UiGlobalTransform,
+        Option<&'static CalculatedClip>,
+        &'static ComputedStackIndex,
+        Option<&'static InheritedVisibility>,
+        Option<&'static crate::gameplay::presentation::DisabledControl>,
     ),
 >;
 
 #[derive(SystemParam)]
-struct PointerContext<'w> {
+struct PointerContext<'w, 's> {
     focus: ResMut<'w, InputFocus>,
     visible: ResMut<'w, InputFocusVisible>,
     next: ResMut<'w, NextState<Screen>>,
@@ -361,6 +463,9 @@ struct PointerContext<'w> {
     gesture: ResMut<'w, Gesture>,
     mouse: Res<'w, ButtonInput<MouseButton>>,
     touches: Res<'w, Touches>,
+    window: Single<'w, 's, &'static Window>,
+    parents: Query<'w, 's, &'static ChildOf>,
+    overlays: OverlayNodes<'w, 's>,
 }
 
 fn activate_pointer(controls: PointerControls, context: PointerContext) {
@@ -373,28 +478,83 @@ fn activate_pointer(controls: PointerControls, context: PointerContext) {
         mut gesture,
         mouse,
         touches,
+        window,
+        parents,
+        overlays,
     } = context;
-    for (entity, control, interaction) in &controls {
-        if *interaction == Interaction::Pressed {
+    let Some(pointer) = gesture.pointer else {
+        return;
+    };
+    if let Pointer::Touch(id) = pointer
+        && touches.just_canceled(id)
+    {
+        gesture.pointer = None;
+        gesture.pending = None;
+        return;
+    }
+    if pointer.started(&mouse, &touches)
+        && let Some(origin) = gesture.origin
+    {
+        let hit = hit_control(&controls, &parents, &overlays, origin);
+        gesture.empty = hit.is_none();
+        gesture.pending = hit
+            .filter(|(_, _, enabled)| *enabled)
+            .map(|(entity, control, _)| (entity, control));
+        if let Some((entity, _)) = gesture.pending {
             focus.set(entity, FocusCause::Pressed);
             visible.0 = false;
-            if matches!(control, Control::About | Control::Back | Control::Quit) {
-                activate(*control, &mut next, &mut exit, &mut messages);
-            } else {
-                gesture.pending = Some((entity, *control));
-            }
         }
     }
-    if mouse.just_released(MouseButton::Left) || touches.iter_just_released().next().is_some() {
+    if pointer.released(&mouse, &touches) {
+        let hit = gesture
+            .release_position
+            .or_else(|| pointer.position(&window, &touches))
+            .and_then(|position| hit_control(&controls, &parents, &overlays, position));
         if !gesture.dragged {
-            if let Some((_, control)) = gesture.pending.take() {
-                activate(control, &mut next, &mut exit, &mut messages);
-            } else {
+            if let (Some((pressed, control)), Some((released, _, true))) =
+                (gesture.pending.take(), hit)
+            {
+                if pressed == released {
+                    activate(control, &mut next, &mut exit, &mut messages);
+                }
+            } else if gesture.empty && hit.is_none() {
                 messages.write(crate::gameplay::Activate(Control::Close));
             }
         }
+        gesture.pointer = None;
         gesture.pending = None;
+        gesture.origin = None;
     }
+}
+
+fn hit_control(
+    controls: &PointerControls,
+    parents: &Query<&ChildOf>,
+    overlays: &OverlayNodes,
+    point: Vec2,
+) -> Option<(Entity, Control, bool)> {
+    controls
+        .iter()
+        .filter_map(
+            |(entity, control, node, transform, clip, stack, visibility, disabled)| {
+                if visibility.is_some_and(|visibility| !visibility.get())
+                    || !active_surface(entity, parents, overlays, point)
+                {
+                    return None;
+                }
+                let bounds = logical_bounds(node, transform);
+                let clipped = clip.map_or(bounds, |clip| {
+                    bounds.intersect(Rect::from_corners(
+                        clip.clip.min * node.inverse_scale_factor(),
+                        clip.clip.max * node.inverse_scale_factor(),
+                    ))
+                });
+                (clipped.width() > 0.0 && clipped.height() > 0.0 && clipped.contains(point))
+                    .then_some((stack.0, entity, *control, disabled.is_none()))
+            },
+        )
+        .max_by_key(|(stack, entity, ..)| (*stack, entity.to_bits()))
+        .map(|(_, entity, control, enabled)| (entity, control, enabled))
 }
 
 #[expect(

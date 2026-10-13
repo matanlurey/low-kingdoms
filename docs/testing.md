@@ -107,6 +107,14 @@ replacement saves, confirmation/cancellation, corrupt/incompatible input, read/w
 finished cleanup, active pending AI after restore, and retry without duplicate accepted commands.
 Background timing tests pause while inactive and verify no accumulated catch-up on return.
 
+The concrete client acceptance modules are `src/gameplay/tests.rs` and
+`src/gameplay/presentation/tests.rs`, alongside existing `src/tests.rs` navigation coverage.
+Production-controller tests include full matches/restarts, reverse initial-resource selection and
+buffered AI draft preservation, startup Resume reconciliation, safe failed-save retries, exact
+pending-AI refresh, replacement confirmation/corrupt saves, read failure recovery, and terminal
+cleanup fallback. Presentation tests pin damage/readiness text, stable entities/scroll after combat,
+actual legal targets, resize/orientation ownership, missing-entity reconciliation, and log scroll.
+
 The browser battle suite uses actual compiled WASM with real mouse/touch input. Required scenarios
 start from Title, keep/mulligan, confirm resources, deploy, observe the opponent, regroup, attack
 both a unit and stronghold, claim initiative, inspect a card/resources, toggle log/hand panels and
@@ -128,8 +136,8 @@ PNG or passing bridge assertion alone does not establish readable pixels or usab
 
 `just smoke-native` runs the real native application with its windowing/rendering path. Screenshot
 support is behind `test-support`; its launch options are `--screenshot PATH [--scene title|mulligan|battle|results]`. A completed Bevy capture
-is saved before normal exit. The application capture deadline is **60 seconds**. The process
-wrapper also defaults to 60 seconds; `--timeout` changes that outer deadline, not the application
+is saved before normal exit. The application capture deadline is **60 seconds per scene**. The process
+wrapper also defaults to 60 seconds per scene; `--timeout` changes that outer deadline, not the application
 capture ceiling. Unsuccessful capture or an unavailable required adapter is a nonzero failure.
 
 Default evidence is `evidence/native/{title,mulligan,battle,results}.png` with matching scene logs. The test-support fixture submits production controls and legal commands, isolates its save slots, and freezes AI scheduling only after reaching each capture scene. Inspect all four images for readable cards, strongholds, controls, clipped text, and a nonblank rendered screen. A delay
@@ -149,8 +157,11 @@ inherit that desktop window constraint.
 Playwright 1.63.0 selects Chromium **153.0.8010.12**, browser revision **1243**, for this baseline.
 Installed browser availability does not by itself establish successful WASM rendering.
 Default evidence is `evidence/web/`, including server logs, captures, browser diagnostics, and
-retained traces. The orchestration timeout defaults to **900 seconds** for the full viewport matrix
-on software renderers; individual tests and startup also have bounded deadlines. Required resource
+retained traces. The orchestration timeout defaults to **3600 seconds** for all 55 cases in the
+viewport matrix on software renderers; ordinary tests have 120-second deadlines and complete-battle
+scenarios have a 600-second deadline, with bounded startup/expect waits. An observed desktop
+match took 270 seconds with software rendering, so the expanded matrix needs this bounded budget.
+Required resource
 failures, unhandled errors, readiness timeout, or a missing browser fail rather than skip.
 
 Readiness comes from the live application. Nonzero canvas dimensions, successful resources, bridge

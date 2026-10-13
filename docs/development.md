@@ -115,6 +115,13 @@ live in the tool; subprocess failure propagates rather than producing a successf
 The same overrides work through Just, for example `just dev-web --port 4200`.
 For `check-all --output PATH`, native and browser evidence go into `PATH/native/` and `PATH/web/`.
 
+Native smoke captures four scenes through `test-support`: Title, Mulligan, an actually deployed
+battlefield, and Results. Each scene receives an isolated save directory and a bounded capture
+before exit. For direct diagnostic launches, use `--screenshot PATH --scene title|mulligan|battle|results`;
+these are test-support options, not production menu or privileged gameplay APIs. Linux virtual-display
+runs must provide a window manager/focus (CI uses Openbox inside Xvfb), otherwise AI correctly stays
+paused. Inspect all four captures rather than treating completed files as visual approval.
+
 Use `cargo check --locked -p low-kingdoms-client` for a focused type check, then focused tests and
 `just check`. Application changes affecting WASM also need `just check-web`. Presentation/startup
 changes need the affected renderer smoke checks and screenshot inspection.
@@ -219,24 +226,24 @@ and pauses the affected path rather than silently continuing to overwrite progre
 
 ## Command map
 
-| Command             | Behavior                                                             |
-| ------------------- | -------------------------------------------------------------------- |
-| `just doctor`       | Read-only tool/target/prerequisite report.                           |
-| `just setup`        | Explicit pinned project-tool and browser dependency setup.           |
-| `just dev`          | Build/run native from the repository root.                           |
-| `just dev-web`      | Rebuild development WASM and serve HTTP, default port 4173.          |
-| `just build`        | Package native release output in `dist/native/`.                     |
-| `just build-web`    | Package production static output in `dist/web/`, without test hooks. |
-| `just fmt`          | Format Rust and selected maintained text/config formats.             |
-| `just fmt-check`    | Check formatting without changes.                                    |
-| `just clippy`       | Strict workspace host lints, including tests and tooling.            |
-| `just test`         | Host unit/integration tests and doctests; no GPU required.           |
-| `just doc`          | First-party documentation with warnings denied.                      |
-| `just check`        | Formatting, structural checks, host lints, tests, and docs.          |
-| `just check-web`    | Compile/lint the application, battle, and rules packages for WASM.   |
-| `just smoke-native` | Actual native renderer, completed screenshot, bounded failure.       |
-| `just smoke-web`    | Generated bundles, real Chromium input, screenshots, and traces.     |
-| `just check-all`    | All mandatory gates, including native/browser rendering.             |
+| Command             | Behavior                                                                  |
+| ------------------- | ------------------------------------------------------------------------- |
+| `just doctor`       | Read-only tool/target/prerequisite report.                                |
+| `just setup`        | Explicit pinned project-tool and browser dependency setup.                |
+| `just dev`          | Build/run native from the repository root.                                |
+| `just dev-web`      | Rebuild development WASM and serve HTTP, default port 4173.               |
+| `just build`        | Package native release output in `dist/native/`.                          |
+| `just build-web`    | Package production static output in `dist/web/`, without test hooks.      |
+| `just fmt`          | Format Rust and selected maintained text/config formats.                  |
+| `just fmt-check`    | Check formatting without changes.                                         |
+| `just clippy`       | Strict workspace host lints, including tests and tooling.                 |
+| `just test`         | Host unit/integration tests and doctests; no GPU required.                |
+| `just doc`          | First-party documentation with warnings denied.                           |
+| `just check`        | Formatting, structural checks, host lints, tests, and docs.               |
+| `just check-web`    | Compile/lint the application, battle, and rules packages for WASM.        |
+| `just smoke-native` | Actual native title/mulligan/battle/results screenshots, bounded failure. |
+| `just smoke-web`    | Generated bundles, real Chromium input, screenshots, and traces.          |
+| `just check-all`    | All mandatory gates, including native/browser rendering.                  |
 
 ## Files, assets, and rendering features
 

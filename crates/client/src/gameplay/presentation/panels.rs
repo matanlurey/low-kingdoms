@@ -54,7 +54,12 @@ pub(super) fn reconcile(
     let Some(root) = presentation.root else {
         return;
     };
-    let (overlay, content, close) = surface(world, root, battle.panel);
+    let (overlay, content, close) = surface(
+        world,
+        root,
+        battle.panel,
+        battle.panel == Panel::Hand && layout.compact,
+    );
     if let Some(position) = position
         && let Some(mut scroll) = world.get_mut::<ScrollPosition>(content)
     {
@@ -78,27 +83,42 @@ pub(super) fn reconcile(
     }
 }
 
-fn surface(world: &mut World, root: Entity, kind: Panel) -> (Entity, Entity, Entity) {
+fn surface(
+    world: &mut World,
+    root: Entity,
+    kind: Panel,
+    hand_tray: bool,
+) -> (Entity, Entity, Entity) {
     let overlay = layout::node(
         world,
         root,
         Node {
             position_type: PositionType::Absolute,
             left: px(0),
-            top: px(0),
+            top: if hand_tray { auto() } else { px(0) },
+            bottom: if hand_tray { px(54) } else { auto() },
             width: percent(100),
-            height: percent(100),
+            height: percent(if hand_tray { 55 } else { 100 }),
             padding: UiRect::all(px(8)),
             justify_content: JustifyContent::Center,
-            align_items: AlignItems::Center,
+            align_items: if hand_tray {
+                AlignItems::End
+            } else {
+                AlignItems::Center
+            },
             ..default()
         },
     );
     world.entity_mut(overlay).insert((
-        OverlayRoot,
+        OverlayRoot { modal: !hand_tray },
         bevy::ui::FocusPolicy::Block,
         GlobalZIndex(20),
-        BackgroundColor(Color::srgba(0.025, 0.035, 0.05, 0.97)),
+        BackgroundColor(Color::srgba(
+            0.025,
+            0.035,
+            0.05,
+            if hand_tray { 0.28 } else { 0.97 },
+        )),
         Name::new("Battle overlay"),
     ));
     let panel = layout::node(
@@ -117,7 +137,11 @@ fn surface(world: &mut World, root: Entity, kind: Panel) -> (Entity, Entity, Ent
         },
     );
     world.entity_mut(panel).insert((
-        TabGroup::modal(),
+        if hand_tray {
+            TabGroup::new(1)
+        } else {
+            TabGroup::modal()
+        },
         BackgroundColor(theme::BACKGROUND),
         BorderColor::all(theme::BORDER),
     ));
@@ -343,10 +367,12 @@ fn inspect(world: &mut World, parent: Entity, battle: &Battle) {
         {
             contextual_button(world, parent, Control::AttackUnit, battle);
         }
-    } else if battle.view.as_ref().is_some_and(|view| {
-        view.phase == Phase::Action && view.hand.iter().any(|held| held.id == id)
-    }) {
-        contextual_button(world, parent, Control::PlayUnit, battle);
+    } else if let Some(view) = battle.view.as_ref()
+        && view.hand.iter().any(|held| held.id == id)
+    {
+        if view.phase == Phase::Action {
+            contextual_button(world, parent, Control::PlayUnit, battle);
+        }
     } else {
         layout::text(
             world,

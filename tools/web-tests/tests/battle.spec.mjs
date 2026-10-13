@@ -71,7 +71,7 @@ function controlFor(state, id) {
     )[0];
 }
 
-async function activate(page, id, touch) {
+async function activate(page, id, touch, quick = false) {
   await expect
     .poll(async () => {
       const control = controlFor(await bridge(page), id);
@@ -83,8 +83,40 @@ async function activate(page, id, touch) {
   const rectangle = control.visibleRect ?? control;
   const x = rectangle.x + rectangle.width / 2;
   const y = rectangle.y + rectangle.height / 2;
-  if (touch) await page.touchscreen.tap(x, y);
-  else await page.mouse.click(x, y);
+  // Canvas controls consume press and release on separate render frames. Keep
+  // a real pointer down across a frame, as a physical click or tap does.
+  if (quick) {
+    if (touch) await page.touchscreen.tap(x, y);
+    else await page.mouse.click(x, y);
+  } else if (touch) {
+    const session = await page.context().newCDPSession(page);
+    await session.send("Input.dispatchTouchEvent", {
+      type: "touchStart",
+      touchPoints: [{ x, y, id: 1 }],
+    });
+    await page.evaluate(
+      () =>
+        new Promise((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(resolve)),
+        ),
+    );
+    await session.send("Input.dispatchTouchEvent", {
+      type: "touchEnd",
+      touchPoints: [],
+    });
+    await session.detach();
+  } else {
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.evaluate(
+      () =>
+        new Promise((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(resolve)),
+        ),
+    );
+    await page.mouse.up();
+  }
+  await page.evaluate(() => new Promise(requestAnimationFrame));
 }
 
 async function assertLayout(page) {
@@ -348,10 +380,13 @@ async function submitResources(page, touch) {
   // Preserve early units, then stop growing at six resources. Statistics are
   // public definitions; legality still comes solely from the engine's list.
   const catalog = state.battle.catalog;
-  const cost = (card) =>
-    catalog.find((definition) => definition.id === card.definition).cost;
+  const definition = (card) =>
+    catalog.find((item) => item.id === card.definition);
   const ordered = [...state.battle.view.hand].sort(
-    (a, b) => cost(b) - cost(a) || b.id - a.id,
+    (a, b) =>
+      definition(b).cost - definition(a).cost ||
+      definition(a).health - definition(b).health ||
+      a.id - b.id,
   );
   const count = initial ? 2 : state.battle.view.resources.length < 6 ? 1 : 0;
   await showHand(page, touch);
@@ -381,6 +416,16 @@ async function playUnit(page, command, touch) {
 async function playAndPauseAi(page, command, touch) {
   await setSpeed(page, "normal", touch);
   const background = await page.context().newPage();
+  // Playwright normally forces every page to appear focused and active.
+  // Disable that driver override so real browser tab focus/visibility governs
+  // the production pause policy. No document or game state is substituted.
+  for (const tab of [page, background]) {
+    const session = await page.context().newCDPSession(tab);
+    await session.send("Emulation.setFocusEmulationEnabled", {
+      enabled: false,
+    });
+    await session.detach();
+  }
   await page.bringToFront();
   const revision = (await bridge(page)).battle.revision;
   await playUnit(page, command, touch);
@@ -392,14 +437,83 @@ async function playAndPauseAi(page, command, touch) {
   const pending = (await bridge(page)).battle;
   expect(pending.view.active_player).toBe("One");
   await background.bringToFront();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => document.visibilityState !== "visible" || !document.hasFocus(),
+      ),
+    )
+    .toBe(true);
   // Keep an actual background tab inactive beyond two Normal AI delays. This
   // checks browser scheduling; no document visibility or game field is edited.
   await background.waitForTimeout(1_600);
   expect((await bridge(page)).battle.revision).toBe(pending.revision);
+  // Reload the inactive page while the persisted AI turn is still pending.
+  // Resume then permits exactly the next AI command, with no duplicate play.
+  await page.reload();
   await background.close();
   await page.bringToFront();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => document.visibilityState === "visible" && document.hasFocus(),
+      ),
+    )
+    .toBe(true);
+  await waitForScreen(page, "title");
+  await activate(page, "resume", touch);
+  await waitForScreen(page, "battle");
+  const restored = (await bridge(page)).battle;
+  expect(restored.revision).toBe(pending.revision);
+  expect(restored.view).toEqual(pending.view);
   await waitForDecision(page);
+  expect((await bridge(page)).battle.revision).toBe(pending.revision + 1);
   await setSpeed(page, "instant", touch);
+}
+
+function commandMessage(command, state) {
+  if (command === "Pass") return "You passed.";
+  if (command === "ClaimInitiative") return "You claimed initiative.";
+  const cards = [
+    ...state.battle.view.hand,
+    ...state.battle.view.players.flatMap((player) =>
+      player.units.map((unit) => unit.card),
+    ),
+  ];
+  const name = (id) => {
+    const card = cards.find((item) => item.id === id);
+    expect(card, `public card ${id}`).toBeDefined();
+    return state.battle.catalog.find(
+      (definition) => definition.id === card.definition,
+    ).name;
+  };
+  if (command.PlayUnit)
+    return `You deployed ${name(command.PlayUnit.card)} exhausted.`;
+  const { attacker, target } = command.Attack;
+  const destination =
+    target.Unit !== undefined
+      ? `Opponent's ${name(target.Unit)}`
+      : "Opponent's stronghold";
+  return `Your ${name(attacker)} attacked ${destination}.`;
+}
+
+function newMessages(previous, current) {
+  // The presentation history is bounded. Find the retained overlap rather than
+  // assuming its length always grows, and require a newly accepted human event.
+  for (
+    let retained = Math.min(previous.length, current.length);
+    retained >= 0;
+    retained--
+  ) {
+    if (
+      previous
+        .slice(previous.length - retained)
+        .every((line, index) => line === current[index])
+    ) {
+      return current.slice(retained);
+    }
+  }
+  return current;
 }
 
 async function attack(page, command, touch, testInfo) {
@@ -411,6 +525,9 @@ async function attack(page, command, touch, testInfo) {
     state.battle.view.players[0].units,
     touch,
   );
+  await expect
+    .poll(async () => (await bridge(page)).battle.selected)
+    .toBe(command.Attack.attacker);
   await activate(page, "attack-unit", touch);
   await expect
     .poll(async () => (await bridge(page)).battle.attacker)
@@ -496,9 +613,30 @@ for (const [route, url] of routes) {
     const touch = Boolean(testInfo.project.use.hasTouch);
     await page.goto(url);
     await waitForScreen(page, "title");
-    await activate(page, "play", touch);
+    await activate(page, "play", touch, true);
     await waitForScreen(page, "mulligan");
     expect((await bridge(page)).battle.view.hand).toHaveLength(6);
+    if (testInfo.project.name === "phone-minimum") {
+      const original = page.viewportSize();
+      const hand = (await bridge(page)).battle.view.hand;
+      const revision = (await bridge(page)).battle.revision;
+      await page.setViewportSize({ width: 667, height: 375 });
+      await expect
+        .poll(async () => (await bridge(page)).viewport.width)
+        .toBe(667);
+      for (const card of [hand.at(-1), hand[0]]) {
+        await selectCard(page, card.id, hand, touch);
+        await waitForPanel(page, "Inspect");
+        expect((await bridge(page)).battle.selected).toBe(card.id);
+        expect((await bridge(page)).battle.revision).toBe(revision);
+        await closePanel(page, touch);
+      }
+      await capture(page, testInfo, `${route}-rotated-mulligan`);
+      await page.setViewportSize(original);
+      await expect
+        .poll(async () => (await bridge(page)).viewport.width)
+        .toBe(original.width);
+    }
     await activate(page, "mulligan", touch);
     await waitForScreen(page, "battle");
     await expect
@@ -532,7 +670,7 @@ if (routes.length) {
   test("complete battle through rendered controls, resume, and restart", async ({
     page,
   }, testInfo) => {
-    test.setTimeout(300_000);
+    test.setTimeout(600_000);
     observeErrors(page);
     const touch = Boolean(testInfo.project.use.hasTouch);
     await page.goto(process.env.LOW_KINGDOMS_BASE_URL);
@@ -583,7 +721,6 @@ if (routes.length) {
       strongholdAttack: false,
       regroup: false,
       resumed: false,
-      background: false,
     };
     let inspected = false;
     let resized = false;
@@ -659,8 +796,19 @@ if (routes.length) {
         (command) => command.Attack.target.Stronghold !== undefined,
       );
       const before = state.battle.revision;
+      const previousHistory = state.battle.history;
+      let submitted;
       if (!exercised.pass && exercised.deployed && legal.includes("Pass")) {
-        await activate(page, "pass", touch);
+        submitted = "Pass";
+        await activate(page, "hand", touch);
+        await waitForPanel(page, "Hand");
+        // The bottom hand tray must leave the battle footer usable. A quick
+        // click/tap also exercises same-frame input without a held press.
+        expect(
+          visible(controlFor(await bridge(page), "pass"), page.viewportSize()),
+        ).toBe(true);
+        await capture(page, testInfo, "hand-tray-before-pass");
+        await activate(page, "pass", touch, true);
         exercised.pass = true;
       } else if (
         !exercised.claim &&
@@ -668,6 +816,7 @@ if (routes.length) {
         view.round >= 2 &&
         legal.includes("ClaimInitiative")
       ) {
+        submitted = "ClaimInitiative";
         await claimInitiative(page, touch);
         exercised.claim = true;
       } else if (
@@ -675,6 +824,7 @@ if (routes.length) {
         unitAttacks.length &&
         view.players[1].units.length >= 3
       ) {
+        submitted = unitAttacks.at(-1);
         // Seed 42 reaches three opponents in round three. At phone widths the
         // last unit is clipped; targeting it requires a real horizontal swipe.
         targetScrolled = await attack(
@@ -686,6 +836,7 @@ if (routes.length) {
         exercised.unitAttack = true;
         await capture(page, testInfo, "unit-combat");
       } else if (plays.length) {
+        submitted = plays[0];
         const card = plays[0].PlayUnit.card;
         if (!inspected) {
           await showHand(page, touch);
@@ -696,26 +847,32 @@ if (routes.length) {
           inspected = true;
         }
         if (!exercised.deployed) {
-          await playAndPauseAi(page, plays[0], touch);
+          await playUnit(page, plays[0], touch);
+          await expect
+            .poll(async () => (await bridge(page)).battle.revision)
+            .toBeGreaterThan(before);
           const deployed = (
             await bridge(page)
           ).battle.view.players[0].units.find((unit) => unit.card.id === card);
           expect(deployed.ready).toBe(false);
           await capture(page, testInfo, "deployed-exhausted");
-          exercised.background = true;
         } else {
           await playUnit(page, plays[0], touch);
         }
         exercised.deployed = true;
       } else if (strongholdAttacks.length) {
+        submitted = strongholdAttacks[0];
         await attack(page, strongholdAttacks[0], touch);
         exercised.strongholdAttack = true;
       } else if (unitAttacks.length) {
+        submitted = unitAttacks[0];
         await attack(page, unitAttacks[0], touch);
       } else if (legal.includes("ClaimInitiative")) {
+        submitted = "ClaimInitiative";
         await claimInitiative(page, touch);
         exercised.claim = true;
       } else {
+        submitted = "Pass";
         expect(legal).toContain("Pass");
         await activate(page, "pass", touch);
         exercised.pass = true;
@@ -723,6 +880,11 @@ if (routes.length) {
       await expect
         .poll(async () => (await bridge(page)).battle.revision)
         .toBeGreaterThan(before);
+      await expect
+        .poll(async () =>
+          newMessages(previousHistory, (await bridge(page)).battle.history),
+        )
+        .toContain(commandMessage(submitted, state));
       await assertLayout(page);
     }
     await waitForScreen(page, "results");
@@ -739,7 +901,7 @@ if (routes.length) {
     ).toBe(true);
     expect(
       results.battle.history.some((line) =>
-        line.startsWith("Opponent attacked"),
+        /^Opponent's .+ attacked /.test(line),
       ),
     ).toBe(true);
     expect(results.battle.resumeAvailable).toBe(false);
@@ -762,5 +924,27 @@ if (routes.length) {
     await waitForScreen(page, "title");
     expect(controlFor(await bridge(page), "resume")).toBeDefined();
     await capture(page, testInfo, "returned-title");
+  });
+
+  test("real background tab pauses pending AI and resumes exactly once after reload", async ({
+    page,
+  }, testInfo) => {
+    observeErrors(page);
+    const touch = Boolean(testInfo.project.use.hasTouch);
+    await page.goto(process.env.LOW_KINGDOMS_BASE_URL);
+    await waitForScreen(page, "title");
+    await activate(page, "play", touch, true);
+    await waitForScreen(page, "mulligan");
+    await activate(page, "keep-hand", touch);
+    await waitForScreen(page, "battle");
+    await submitResources(page, touch);
+    const state = await waitForDecision(page);
+    const command = state.battle.legal.find((item) => item.PlayUnit);
+    expect(command).toBeDefined();
+    await playAndPauseAi(page, command, touch);
+    const resumed = await assertLayout(page);
+    expect(resumed.battle.view.active_player).toBe("Zero");
+    expect(resumed.battle.history).toContain(commandMessage(command, state));
+    await capture(page, testInfo, "pending-ai-resumed-once");
   });
 }

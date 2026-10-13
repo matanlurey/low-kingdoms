@@ -57,7 +57,9 @@ pub(crate) struct DisabledControl;
     clippy::redundant_pub_crate,
     reason = "The sibling input module restricts gestures to the currently open overlay."
 )]
-pub(crate) struct OverlayRoot;
+pub(crate) struct OverlayRoot {
+    pub(crate) modal: bool,
+}
 
 #[derive(SystemSet, Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub(super) struct Reconcile;

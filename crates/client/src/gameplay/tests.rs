@@ -87,9 +87,17 @@ pub(crate) fn install_empty_store(app: &mut App) {
 }
 
 fn application(store: MemoryStore) -> App {
+    application_with_store(Box::new(store))
+}
+
+#[expect(
+    clippy::redundant_pub_crate,
+    reason = "Native storage tests exercise corrupt physical files through the production controller."
+)]
+pub(crate) fn application_with_store(store: Box<dyn Store>) -> App {
     let mut app = App::new();
     app.insert_resource(Runtime {
-        store: Some(Box::new(store)),
+        store: Some(store),
         ..default()
     })
     .add_plugins((

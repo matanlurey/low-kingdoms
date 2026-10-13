@@ -37,7 +37,16 @@ pub(super) struct SnapshotData<'w, 's> {
     window: Single<'w, 's, &'static Window>,
     battle: Res<'w, crate::gameplay::Battle>,
     parents: Query<'w, 's, &'static ChildOf>,
-    overlays: Query<'w, 's, Entity, With<crate::gameplay::presentation::OverlayRoot>>,
+    overlays: Query<
+        'w,
+        's,
+        (
+            Entity,
+            &'static crate::gameplay::presentation::OverlayRoot,
+            &'static ComputedNode,
+            &'static UiGlobalTransform,
+        ),
+    >,
     controls: ControlNodes<'w, 's>,
     texts: Query<
         'w,
@@ -82,7 +91,8 @@ pub(super) fn publish_snapshot(data: SnapshotData) {
         let (position, size) = logical_rect(node, transform);
         let rectangle = Rect::from_corners(position, position + size);
         let clipped = clip.map_or(rectangle, |clip| rectangle.intersect(Rect::from_corners(clip.clip.min * node.inverse_scale_factor(), clip.clip.max * node.inverse_scale_factor())));
-        serde_json::json!({ "id": control.id(), "label": control.label(), "x":position.x,"y":position.y,"width":size.x,"height":size.y,"focused":focused,"enabled":disabled.is_none(),"visible":active_surface(entity, &parents, &overlays) && clipped.width()>0.0 && clipped.height()>0.0,"visibleRect":{"x":clipped.min.x,"y":clipped.min.y,"width":clipped.width().max(0.0),"height":clipped.height().max(0.0)} })
+        let clipped = active_rectangle(entity, &parents, &overlays, clipped);
+        serde_json::json!({ "id": control.id(), "label": control.label(), "x":position.x,"y":position.y,"width":size.x,"height":size.y,"focused":focused,"enabled":disabled.is_none(),"visible":clipped.width()>0.0 && clipped.height()>0.0,"visibleRect":{"x":clipped.min.x,"y":clipped.min.y,"width":clipped.width().max(0.0),"height":clipped.height().max(0.0)} })
     }).collect();
     let text_json: Vec<_> = texts.iter().map(|(text,node,transform)| {
         let (position,size)=logical_rect(node,transform);
@@ -90,7 +100,9 @@ pub(super) fn publish_snapshot(data: SnapshotData) {
     }).collect();
     let scroll_json: Vec<_> = panes.iter().map(|(entity,node,transform,scroll,pane)| {
         let (position,size)=logical_rect(node,transform);
-        serde_json::json!({"x":position.x,"y":position.y,"width":size.x,"height":size.y,"offsetX":scroll.x,"offsetY":scroll.y,"horizontal":pane.horizontal,"visible":active_surface(entity,&parents,&overlays)})
+        let rectangle = active_rectangle(entity, &parents, &overlays, Rect::from_corners(position, position + size));
+        let visible = rectangle.width() > 0.0 && rectangle.height() > 0.0;
+        serde_json::json!({"x":position.x,"y":position.y,"width":size.x,"height":size.y,"offsetX":scroll.x,"offsetY":scroll.y,"horizontal":pane.horizontal,"visible":visible})
     }).collect();
     let screen = match state.get() {
         Screen::Title => "title",
@@ -109,21 +121,48 @@ fn logical_rect(node: &ComputedNode, transform: &UiGlobalTransform) -> (Vec2, Ve
     (center - size * 0.5, size)
 }
 
-fn active_surface(
+fn active_rectangle(
     mut entity: Entity,
     parents: &Query<&ChildOf>,
-    overlays: &Query<Entity, With<crate::gameplay::presentation::OverlayRoot>>,
-) -> bool {
-    if overlays.is_empty() {
-        return true;
-    }
+    overlays: &Query<(
+        Entity,
+        &crate::gameplay::presentation::OverlayRoot,
+        &ComputedNode,
+        &UiGlobalTransform,
+    )>,
+    mut rectangle: Rect,
+) -> Rect {
     loop {
         if overlays.get(entity).is_ok() {
-            return true;
+            return rectangle;
         }
         let Ok(parent) = parents.get(entity) else {
-            return false;
+            break;
         };
         entity = parent.parent();
     }
+    for (_, overlay, node, transform) in overlays {
+        if overlay.modal {
+            return Rect::from_corners(rectangle.min, rectangle.min);
+        }
+        let (position, size) = logical_rect(node, transform);
+        let blocked = Rect::from_corners(position, position + size);
+        let intersection = rectangle.intersect(blocked);
+        if intersection.width() > 0.0 && intersection.height() > 0.0 {
+            let above = Rect::from_corners(
+                rectangle.min,
+                Vec2::new(rectangle.max.x, intersection.min.y),
+            );
+            let below = Rect::from_corners(
+                Vec2::new(rectangle.min.x, intersection.max.y),
+                rectangle.max,
+            );
+            rectangle = if above.height() > below.height() {
+                above
+            } else {
+                below
+            };
+        }
+    }
+    rectangle
 }

@@ -88,8 +88,10 @@ struct FileStore {
 
 impl Store for FileStore {
     fn read(&mut self) -> Result<Option<String>, StorageError> {
-        match fs::read_to_string(&self.path) {
-            Ok(data) => Ok(Some(data)),
+        match fs::read(&self.path) {
+            Ok(data) => String::from_utf8(data)
+                .map(Some)
+                .map_err(|_| StorageError::Encoding),
             Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
             Err(error) => Err(StorageError::Read(error.to_string())),
         }
@@ -212,7 +214,83 @@ mod tests {
             Some("invalid envelope {".into())
         );
         fs::write(&store.path, [0xff, 0xfe]).expect("write invalid UTF-8");
-        assert!(matches!(store.read(), Err(StorageError::Read(_))));
+        assert_eq!(store.read(), Err(StorageError::Encoding));
+        assert_eq!(
+            fs::read(&store.path).expect("damaged bytes remain intact"),
+            [0xff, 0xfe]
+        );
+    }
+
+    #[test]
+    fn damaged_encoding_requires_confirmation_then_starts_a_saved_battle() {
+        use bevy::prelude::State;
+        use low_kingdoms_battle::{content::Content, session::Session};
+
+        use crate::{
+            gameplay::{Activate, Battle, Panel, tests::application_with_store},
+            screens::Screen,
+            ui::Control,
+        };
+
+        let directory = TestDirectory::new();
+        let mut store = directory.store();
+        store.write("previous save").expect("create slot directory");
+        let path = store.path.clone();
+        let original = [0xff, 0xfe, 0x80];
+        fs::write(&path, original).expect("binary-corrupt file fixture");
+        assert_eq!(store.read(), Err(StorageError::Encoding));
+
+        let mut app = application_with_store(Box::new(store));
+        let battle = app.world().resource::<Battle>();
+        assert!(!battle.resume_available);
+        assert!(battle.error.is_none());
+        assert!(battle.notification.contains("damaged text encoding"));
+        assert_eq!(fs::read(&path).expect("original slot"), original);
+
+        for control in [Control::Play, Control::Cancel, Control::Play] {
+            app.world_mut().write_message(Activate(control));
+            app.update();
+            app.update();
+            assert_eq!(
+                fs::read(&path).expect("confirmation preserves slot"),
+                original
+            );
+            assert_eq!(
+                app.world().resource::<Battle>().panel,
+                if control == Control::Cancel {
+                    Panel::None
+                } else {
+                    Panel::Replace
+                }
+            );
+            assert_eq!(
+                *app.world().resource::<State<Screen>>().get(),
+                Screen::Title
+            );
+        }
+
+        app.world_mut()
+            .write_message(Activate(Control::ConfirmReplace));
+        app.update();
+        app.update();
+        assert_eq!(
+            *app.world().resource::<State<Screen>>().get(),
+            Screen::Mulligan
+        );
+        assert!(app.world().resource::<Battle>().error.is_none());
+        let envelope: serde_json::Value = serde_json::from_str(
+            &fs::read_to_string(&path).expect("confirmed replacement is valid text"),
+        )
+        .expect("valid local save envelope");
+        let encoded = envelope["session"]
+            .as_str()
+            .expect("session in local envelope");
+        let session = Session::restore(&Content::load().expect("content"), encoded)
+            .expect("confirmed new battle is resumable");
+        assert_eq!(
+            session.view().phase,
+            low_kingdoms_rules::model::Phase::Mulligan
+        );
     }
 
     #[test]
