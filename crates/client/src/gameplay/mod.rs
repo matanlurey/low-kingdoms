@@ -2,11 +2,13 @@
 
 use bevy::prelude::*;
 use low_kingdoms_battle::{
+    ai::AiError,
     content::{CardDefinition, Content},
-    session::Session,
+    session::{Session, SessionError},
 };
 use low_kingdoms_rules::{
     command::{AttackTarget, Command},
+    error::Error as RulesError,
     event::Event,
     model::{Card, CardId, DefinitionId, Outcome, Phase, PlayerId},
     view::PlayerView,
@@ -191,6 +193,56 @@ fn fail(battle: &mut Battle, message: String) {
     battle.panel = Panel::Error;
     // The diagnostic is deliberately concise and never includes snapshots or private commands.
     warn!("Battle operation paused; a recoverable message is displayed.");
+}
+
+const fn session_error_category(error: &SessionError) -> &'static str {
+    match error {
+        SessionError::Rules(error) => match error {
+            RulesError::InvalidConfiguration => "rules_invalid_configuration",
+            RulesError::DuplicateDefinition(_) => "rules_duplicate_definition",
+            RulesError::InvalidDefinition(_) => "rules_invalid_definition",
+            RulesError::UnknownDefinition(_) => "rules_unknown_definition",
+            RulesError::WrongPhase => "rules_wrong_phase",
+            RulesError::NotYourAction => "rules_not_your_action",
+            RulesError::InvalidCard => "rules_invalid_card",
+            RulesError::DuplicateResource => "rules_duplicate_resource",
+            RulesError::TooManyResources => "rules_too_many_resources",
+            RulesError::InsufficientResources => "rules_insufficient_resources",
+            RulesError::UnitExhausted => "rules_unit_exhausted",
+            RulesError::InvalidTarget => "rules_invalid_target",
+            RulesError::DecisionAlreadySubmitted => "rules_decision_already_submitted",
+            RulesError::InitiativeUnavailable => "rules_initiative_unavailable",
+            RulesError::GameAlreadyFinished => "rules_game_already_finished",
+            RulesError::ArithmeticLimit => "rules_arithmetic_limit",
+            RulesError::SnapshotFormat => "rules_snapshot_format",
+            RulesError::SnapshotVersion => "rules_snapshot_version",
+            RulesError::SnapshotDefinitions => "rules_snapshot_definitions",
+            RulesError::SnapshotInvariant => "rules_snapshot_invariant",
+        },
+        SessionError::Ai(error) => match error {
+            AiError::NoLegalCommand => "ai_no_legal_command",
+            AiError::UnknownDefinition(_) => "ai_unknown_definition",
+            AiError::MissingVisibleCard(_) => "ai_missing_visible_card",
+        },
+        SessionError::NoAiDecision => "no_ai_decision",
+        SessionError::CounterLimit => "counter_limit",
+        SessionError::SaveFormat => "save_format",
+        SessionError::SaveVersion => "save_version",
+        SessionError::SaveContent => "save_content",
+        SessionError::SaveRoles => "save_roles",
+        SessionError::SaveAiProfile => "save_ai_profile",
+        SessionError::SaveInvariant => "save_invariant",
+    }
+}
+
+fn fail_session(battle: &mut Battle, operation: &'static str, error: &SessionError) {
+    // Classifications are static; never format the underlying error, command, or session.
+    warn!(
+        operation,
+        category = session_error_category(error),
+        "Battle command execution paused."
+    );
+    fail(battle, error.to_string());
 }
 
 fn load(runtime: &mut Runtime, battle: &mut Battle) {
@@ -588,7 +640,7 @@ fn accept(runtime: &mut Runtime, battle: &mut Battle, command: &Command) {
     };
     match session.apply_human(command) {
         Ok(events) => succeeded(runtime, battle, &events, true),
-        Err(error) => fail(battle, error.to_string()),
+        Err(error) => fail_session(battle, "human_command", &error),
     }
 }
 
@@ -836,7 +888,7 @@ fn advance_ai(
                 succeeded(&mut runtime, &mut battle, &events, false);
                 NextState::set_if_neq(&mut next, screen_for(&battle));
             }
-            Err(error) => fail(&mut battle, error.to_string()),
+            Err(error) => fail_session(&mut battle, "ai_command", &error),
         }
     }
 }

@@ -86,7 +86,8 @@ small vanilla fixtures rather than a designed content library.
   history with full authoritative replay.
 - `src/platform/storage/native.rs` client tests: absolute per-user paths, missing slots,
   create/replace/read/clear, opaque corrupt text, failed replacement preserving old contents,
-  temporary collision cleanup, and operation errors. Client storage injection also exercises
+  temporary collision cleanup, invalid-UTF-8 confirmation/replacement through production controls,
+  and operation errors. Client storage injection also exercises
   unavailable/failed writes and completion cleanup through the production lifecycle.
 
 AI tests receive only `PlayerView`, legal commands, and public definitions. Headless full matches
@@ -109,7 +110,8 @@ Background timing tests pause while inactive and verify no accumulated catch-up 
 
 The concrete client acceptance modules are `src/gameplay/tests.rs` and
 `src/gameplay/presentation/tests.rs`, alongside existing `src/tests.rs` navigation coverage.
-Production-controller tests include full matches/restarts, reverse initial-resource selection and
+Production-controller tests include explicit Victory/Defeat/Draw outcomes and slot cleanup,
+quota retry without duplicate actions, full matches/restarts, reverse initial-resource selection and
 buffered AI draft preservation, startup Resume reconciliation, safe failed-save retries, exact
 pending-AI refresh, replacement confirmation/corrupt saves, read failure recovery, and terminal
 cleanup fallback. Presentation tests pin damage/readiness text, stable entities/scroll after combat,
@@ -163,6 +165,20 @@ scenarios have a 600-second deadline, with bounded startup/expect waits. An obse
 match took 270 seconds with software rendering, so the expanded matrix needs this bounded budget.
 Required resource
 failures, unhandled errors, readiness timeout, or a missing browser fail rather than skip.
+
+The maintained suite selects the supported `channel: "chromium"` full Chromium executable.
+This matters for the five real background-tab scenarios: the fixture disables Playwright's focus
+emulation on both tabs through CDP, then actual browser visibility/focus controls the production
+pause policy. It does not replace document visibility or mutate gameplay. A headless-shell subset
+can verify other interactions but cannot establish real tab background behavior or pass the 55-case
+gate. An environment that denies ProcessSingleton UNIX sockets blocks full Chromium launch; report
+that as blocked while retaining the full-channel CI check.
+
+`tests/storage.spec.mjs` drives the actual compiled WASM through rendered controls for corrupt-save
+replacement/cancellation, unavailable storage, read failures, and quota recovery without duplicate
+accepted commands. The narrow test fixture supplies storage failures, never game-state mutation.
+Its twenty cases span all five viewports. Supplementary subset results are recorded separately from
+`just smoke-web`; they do not imply the maintained full browser matrix passed.
 
 Readiness comes from the live application. Nonzero canvas dimensions, successful resources, bridge
 observations, and screenshots complement one another. Resolving a WASM import or finding a DOM

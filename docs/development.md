@@ -152,6 +152,14 @@ just smoke-native
 just smoke-web
 ```
 
+The maintained Playwright matrix uses the supported full `channel: "chromium"` browser for real
+multi-tab focus/visibility checks. Setup installs the pinned browser; a working headless shell is
+not a substitute for the full-channel background scenarios. If local process/UNIX-socket policy
+blocks Chromium's ProcessSingleton, record the full smoke as blocked and verify on a provisioned
+runner. Do not disable the background policy or replace actual tab activity with a mocked field.
+The full 55-case smoke is bounded to 3600 seconds (browser CI job 90 minutes); complete-match tests
+allow 600 seconds because a measured software-rendered desktop match took about 270 seconds.
+
 Headless battle tests cover content, view-only AI, complete simulations, and exact saved continuation.
 Client tests use production command/scheduling/presentation paths. Browser tests use real compiled
 WASM and pointer/touch input; they do not install an HTML gameplay mock or a writable game bridge.

@@ -244,7 +244,14 @@ fn hand(world: &mut World, parent: Entity, battle: &Battle) {
         layout::text(world, parent, "Your hand is empty.", 16.0, theme::SECONDARY);
     }
     for card in &view.hand {
-        card_row(world, parent, *card, battle, "Inspect");
+        let caption = if !view.decision_submitted
+            && matches!(view.phase, Phase::InitialResourcing | Phase::Regroup)
+        {
+            "Tap to resource"
+        } else {
+            "Inspect"
+        };
+        card_row(world, parent, *card, battle, caption);
     }
     if matches!(view.phase, Phase::InitialResourcing | Phase::Regroup) {
         contextual_button(world, parent, Control::ConfirmResources, battle);

@@ -324,3 +324,63 @@ fn opening_hand_inspection_has_correct_stats_without_a_play_control_or_wrong_zon
             .any(|control| *control == Control::PlayUnit)
     );
 }
+
+#[test]
+fn hand_captions_switch_from_resourcing_to_inspection_after_the_decision_is_submitted() {
+    let (mut app, _) = fixture();
+    let content = Content::load().expect("embedded content");
+    let definitions = content
+        .cards()
+        .iter()
+        .map(CardDefinition::unit_definition)
+        .collect();
+    let (mut game, _) = Game::new(content.config(42), definitions).expect("opening hand");
+    for player in PlayerId::ALL {
+        game.apply(player, &Command::KeepHand).expect("keep hand");
+    }
+    project(&mut app, &game);
+    {
+        let mut battle = app.world_mut().resource_mut::<Battle>();
+        battle.catalog = content.cards().to_vec();
+        battle.panel = crate::gameplay::Panel::Hand;
+    }
+    app.update();
+    assert!(
+        app.world_mut()
+            .query::<&Text>()
+            .iter(app.world())
+            .any(|text| text.0.contains("Tap to resource"))
+    );
+    let card = game.view_for(PlayerId::Zero).hand[0].id;
+    app.world_mut().resource_mut::<Battle>().resource_selection = vec![card];
+    app.update();
+    assert!(
+        app.world_mut()
+            .query::<&Text>()
+            .iter(app.world())
+            .any(|text| text.0.contains("Selected resource"))
+    );
+    game.apply(
+        PlayerId::Zero,
+        &Command::ChooseInitialResources { cards: vec![card] },
+    )
+    .expect("resource decision");
+    project(&mut app, &game);
+    app.world_mut()
+        .resource_mut::<Battle>()
+        .resource_selection
+        .clear();
+    app.update();
+    assert!(
+        !app.world_mut()
+            .query::<&Text>()
+            .iter(app.world())
+            .any(|text| text.0.contains("Tap to resource"))
+    );
+    assert!(
+        app.world_mut()
+            .query::<&Text>()
+            .iter(app.world())
+            .any(|text| text.0.contains("Tap to inspect"))
+    );
+}

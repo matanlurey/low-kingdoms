@@ -3,7 +3,7 @@ use std::collections::BTreeSet;
 use bevy::{input_focus::tab_navigation::TabIndex, prelude::*};
 use low_kingdoms_rules::{
     command::{AttackTarget, Command},
-    model::{Card, CardId},
+    model::{Card, CardId, Phase},
     view::UnitView,
 };
 
@@ -137,6 +137,11 @@ fn update(
                 definition.health,
                 if battle.resource_selection.contains(&card.id) {
                     "Selected resource"
+                } else if battle.view.as_ref().is_some_and(|view| {
+                    !view.decision_submitted
+                        && matches!(view.phase, Phase::InitialResourcing | Phase::Regroup)
+                }) {
+                    "Tap to resource"
                 } else {
                     "Tap to inspect"
                 }

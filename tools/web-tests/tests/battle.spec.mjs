@@ -83,8 +83,8 @@ async function activate(page, id, touch, quick = false) {
   const rectangle = control.visibleRect ?? control;
   const x = rectangle.x + rectangle.width / 2;
   const y = rectangle.y + rectangle.height / 2;
-  // Canvas controls consume press and release on separate render frames. Keep
-  // a real pointer down across a frame, as a physical click or tap does.
+  // Most interactions use a physical press spanning render frames. The explicit
+  // quick paths also verify press/release events arriving in the same frame.
   if (quick) {
     if (touch) await page.touchscreen.tap(x, y);
     else await page.mouse.click(x, y);
@@ -228,7 +228,7 @@ async function capture(page, testInfo, name) {
   });
 }
 
-async function scrollGesture(page, rectangle, direction, touch) {
+async function scrollGesture(page, rectangle, direction, touch, distance) {
   const viewport = page.viewportSize();
   const left = Math.max(18, rectangle.x + 18);
   const right = Math.min(
@@ -248,9 +248,11 @@ async function scrollGesture(page, rectangle, direction, touch) {
     const start = horizontal
       ? { x: direction > 0 ? right : left, y }
       : { x, y: direction > 0 ? bottom : top };
+    const span = horizontal ? right - left : bottom - top;
+    const travel = Math.min(distance ?? span, span);
     const end = horizontal
-      ? { x: direction > 0 ? left : right, y }
-      : { x, y: direction > 0 ? top : bottom };
+      ? { x: start.x - direction * travel, y }
+      : { x, y: start.y - direction * travel };
     await session.send("Input.dispatchTouchEvent", {
       type: "touchStart",
       touchPoints: [start],
@@ -275,8 +277,8 @@ async function scrollGesture(page, rectangle, direction, touch) {
   } else {
     await page.mouse.move(x, y);
     await page.mouse.wheel(
-      horizontal ? direction * 360 : 0,
-      horizontal ? 0 : direction * 360,
+      horizontal ? direction * (distance ?? 360) : 0,
+      horizontal ? 0 : direction * (distance ?? 360),
     );
   }
   await page.evaluate(() => new Promise(requestAnimationFrame));
@@ -305,29 +307,70 @@ function rowRectangle(state, ids, viewport) {
   return { x: 0, y: top, width: viewport.width, height: bottom - top };
 }
 
+function cardInRow(state, id, rectangle) {
+  const horizontal = rectangle.horizontal !== false;
+  // A clipped card still exposes its public layout bounds. Choose the instance
+  // in this row, rather than an inspection overlay or an inactive underlay.
+  return state.controls
+    .filter((control) => {
+      if (control.id !== `card-${id}`) return false;
+      const center = horizontal
+        ? control.y + control.height / 2
+        : control.x + control.width / 2;
+      const start = horizontal ? rectangle.y : rectangle.x;
+      const length = horizontal ? rectangle.height : rectangle.width;
+      return center >= start && center <= start + length;
+    })
+    .sort((a, b) => (b.stackIndex ?? 0) - (a.stackIndex ?? 0))[0];
+}
+
 async function revealCard(page, id, rowIds, touch) {
   let scrolled = false;
-  for (const direction of [1, -1]) {
-    for (let attempt = 0; attempt < 8; attempt++) {
-      const state = await bridge(page);
-      if (visible(controlFor(state, `card-${id}`), page.viewportSize()))
-        return scrolled;
-      await scrollGesture(
-        page,
-        rowRectangle(state, rowIds, page.viewportSize()),
-        direction,
-        touch,
-      );
-      scrolled = true;
-    }
+  for (let attempt = 0; attempt < 16; attempt++) {
+    const state = await bridge(page);
+    if (visible(controlFor(state, `card-${id}`), page.viewportSize()))
+      return scrolled;
+    const rectangle = rowRectangle(state, rowIds, page.viewportSize());
+    const card = cardInRow(state, id, rectangle);
+    expect(card, `public bounds for card ${id}`).toBeDefined();
+    const horizontal = rectangle.horizontal !== false;
+    const position = horizontal ? card.x : card.y;
+    const start = horizontal ? rectangle.x : rectangle.y;
+    // Follow the actual target's side of the viewport. Searching blindly toward
+    // one edge first can repeatedly overscroll before a left-side target.
+    const direction = position < start ? -1 : 1;
+    await scrollGesture(page, rectangle, direction, touch);
+    scrolled = true;
   }
   throw new Error(`Card ${id} was not reachable by real scrolling.`);
 }
 
+async function reverseAtEdge(page, id, rowIds, touch) {
+  const before = await bridge(page);
+  const rectangle = rowRectangle(before, rowIds, page.viewportSize());
+  const horizontal = rectangle.horizontal !== false;
+  const card = cardInRow(before, id, rectangle);
+  const position = horizontal ? card.x : card.y;
+  await scrollGesture(page, rectangle, -1, touch, 48);
+  // Reversing from the far edge must immediately move rendered content. This
+  // catches unbounded raw offsets hidden by the renderer's scroll clamping.
+  await expect
+    .poll(async () => {
+      const current = cardInRow(await bridge(page), id, rectangle);
+      return (horizontal ? current.x : current.y) - position;
+    })
+    .toBeGreaterThan(8);
+  const after = await bridge(page);
+  expect(after.battle.view).toEqual(before.battle.view);
+  expect(after.battle.resources).toEqual(before.battle.resources);
+  expect(after.battle.attacker).toBe(before.battle.attacker);
+}
+
 async function selectCard(page, id, cards, touch) {
   const rowIds = cards.map((card) => `card-${card.id ?? card.card.id}`);
-  await revealCard(page, id, rowIds, touch);
+  const scrolled = await revealCard(page, id, rowIds, touch);
   await activate(page, `card-${id}`, touch);
+  return scrolled;
 }
 
 async function showHand(page, touch) {
@@ -371,7 +414,7 @@ async function waitForDecision(page) {
   return bridge(page);
 }
 
-async function submitResources(page, touch) {
+async function submitResources(page, touch, testInfo) {
   const state = await waitForDecision(page);
   const choices = state.battle.legal;
   const initial = choices.find((command) => command.ChooseInitialResources);
@@ -390,17 +433,45 @@ async function submitResources(page, touch) {
   );
   const count = initial ? 2 : state.battle.view.resources.length < 6 ? 1 : 0;
   await showHand(page, touch);
-  for (const card of ordered.slice(0, count)) {
-    await selectCard(page, card.id, state.battle.view.hand, touch);
+  for (const [index, card] of ordered.slice(0, count).entries()) {
+    const scrolled = await selectCard(
+      page,
+      card.id,
+      state.battle.view.hand,
+      touch,
+    );
     await expect
       .poll(async () => (await bridge(page)).battle.resources.includes(card.id))
       .toBe(true);
+    if (initial && touch && testInfo) {
+      if (index === 0 && scrolled) {
+        await capture(page, testInfo, "resource-scroll-forward");
+        await reverseAtEdge(
+          page,
+          card.id,
+          state.battle.view.hand.map((item) => `card-${item.id}`),
+          touch,
+        );
+        await capture(page, testInfo, "resource-scroll-edge-reversal");
+      }
+      if (index === 1)
+        await capture(page, testInfo, "resource-scroll-backward");
+    }
   }
   const before = (await bridge(page)).battle.revision;
   await activate(page, "confirm-resources", touch);
   await expect
-    .poll(async () => (await bridge(page)).battle.revision)
-    .toBeGreaterThan(before);
+    .poll(async () => {
+      const battle = (await bridge(page)).battle;
+      // Both players may submit setup/regroup decisions independently. An AI
+      // revision alone does not acknowledge this rendered human confirmation.
+      return (
+        battle.revision > before &&
+        (battle.view.decision_submitted ||
+          battle.view.phase !== state.battle.view.phase)
+      );
+    })
+    .toBe(true);
 }
 
 async function playUnit(page, command, touch) {
@@ -533,13 +604,13 @@ async function attack(page, command, touch, testInfo) {
     .poll(async () => (await bridge(page)).battle.attacker)
     .toBe(command.Attack.attacker);
   if (testInfo) {
-    const revision = (await bridge(page)).battle.revision;
+    const targetingView = (await bridge(page)).battle.view;
     await capture(page, testInfo, "attack-targeting");
     await page.keyboard.press("Escape");
     await expect
       .poll(async () => (await bridge(page)).battle.attacker)
       .toBeNull();
-    expect((await bridge(page)).battle.revision).toBe(revision);
+    expect((await bridge(page)).battle.view).toEqual(targetingView);
     await selectCard(
       page,
       command.Attack.attacker,
@@ -560,6 +631,12 @@ async function attack(page, command, touch, testInfo) {
       touch,
     );
     expect((await bridge(page)).battle.attacker).toBe(command.Attack.attacker);
+    if (scrolled && touch && testInfo) {
+      const rowIds = targets.map((unit) => `card-${unit.card.id}`);
+      await reverseAtEdge(page, command.Attack.target.Unit, rowIds, touch);
+      await capture(page, testInfo, "enemy-scroll-edge-reversal");
+      await revealCard(page, command.Attack.target.Unit, rowIds, touch);
+    }
     if (scrolled && testInfo)
       await capture(page, testInfo, "offscreen-attack-target");
     await activate(page, `card-${command.Attack.target.Unit}`, touch);
@@ -618,8 +695,8 @@ for (const [route, url] of routes) {
     expect((await bridge(page)).battle.view.hand).toHaveLength(6);
     if (testInfo.project.name === "phone-minimum") {
       const original = page.viewportSize();
-      const hand = (await bridge(page)).battle.view.hand;
-      const revision = (await bridge(page)).battle.revision;
+      const opening = (await bridge(page)).battle.view;
+      const hand = opening.hand;
       await page.setViewportSize({ width: 667, height: 375 });
       await expect
         .poll(async () => (await bridge(page)).viewport.width)
@@ -628,7 +705,12 @@ for (const [route, url] of routes) {
         await selectCard(page, card.id, hand, touch);
         await waitForPanel(page, "Inspect");
         expect((await bridge(page)).battle.selected).toBe(card.id);
-        expect((await bridge(page)).battle.revision).toBe(revision);
+        const inspected = (await bridge(page)).battle.view;
+        // AI may independently finish its mulligan while a card is inspected.
+        // Inspecting must preserve the human's cards and pending decision.
+        expect(inspected).toEqual(opening);
+        expect(inspected.phase).toBe("Mulligan");
+        expect(inspected.decision_submitted).toBe(false);
         await closePanel(page, touch);
       }
       await capture(page, testInfo, `${route}-rotated-mulligan`);
@@ -681,7 +763,7 @@ if (routes.length) {
     await capture(page, testInfo, "mulligan");
     await activate(page, "keep-hand", touch);
     await waitForScreen(page, "battle");
-    await submitResources(page, touch);
+    await submitResources(page, touch, testInfo);
     await waitForDecision(page);
     await assertLayout(page);
     await capture(page, testInfo, "battle-initial");
@@ -693,12 +775,12 @@ if (routes.length) {
     await setSpeed(page, "fast", touch);
     await setSpeed(page, "normal", touch);
     await setSpeed(page, "instant", touch);
-    const idleRevision = (await bridge(page)).battle.revision;
+    const idleView = (await bridge(page)).battle.view;
     await activate(page, "hand", touch);
     await waitForPanel(page, "Hand");
     await capture(page, testInfo, "hand-tray");
     await closePanel(page, touch);
-    expect((await bridge(page)).battle.revision).toBe(idleRevision);
+    expect((await bridge(page)).battle.view).toEqual(idleView);
     await activate(page, "resources", touch);
     await waitForPanel(page, "Resources");
     await capture(page, testInfo, "resource-inspection");
@@ -712,6 +794,7 @@ if (routes.length) {
     await waitForPanel(page, "Log");
     await capture(page, testInfo, "event-log");
     await closePanel(page, touch);
+    expect((await bridge(page)).battle.view).toEqual(idleView);
 
     const exercised = {
       deployed: false,
@@ -850,7 +933,7 @@ if (routes.length) {
           await showHand(page, touch);
           await selectCard(page, card, view.hand, touch);
           await capture(page, testInfo, "card-inspection");
-          expect((await bridge(page)).battle.revision).toBe(before);
+          expect((await bridge(page)).battle.view).toEqual(view);
           await closePanel(page, touch);
           inspected = true;
         }

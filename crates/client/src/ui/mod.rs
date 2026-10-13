@@ -363,13 +363,13 @@ fn scroll_input(data: ScrollInput) {
         }
         if gesture.dragged
             && let (Some(entity), Some(previous)) = (gesture.pane, gesture.previous)
-            && let Ok((_, _, _, pane, mut scroll)) = panes.get_mut(entity)
+            && let Ok((_, node, _, pane, mut scroll)) = panes.get_mut(entity)
         {
             let delta = previous - position;
             if pane.horizontal {
-                scroll.x = (scroll.x + delta.x).max(0.0);
+                scroll_by(node, true, &mut scroll, delta.x);
             } else {
-                scroll.y = (scroll.y + delta.y).max(0.0);
+                scroll_by(node, false, &mut scroll, delta.y);
             }
         }
         gesture.previous = Some(position);
@@ -401,13 +401,25 @@ fn scroll_wheel(
                         1.0
                     };
                     if pane.horizontal {
-                        scroll.x = (event.y + event.x).mul_add(-factor, scroll.x).max(0.0);
+                        scroll_by(node, true, &mut scroll, -(event.y + event.x) * factor);
                     } else {
-                        scroll.y = event.y.mul_add(-factor, scroll.y).max(0.0);
+                        scroll_by(node, false, &mut scroll, -event.y * factor);
                     }
                 }
             }
         }
+    }
+}
+
+fn scroll_by(node: &ComputedNode, horizontal: bool, scroll: &mut ScrollPosition, delta: f32) {
+    // Bevy clamps its rendered offset but leaves ScrollPosition unchanged. Bound the input
+    // value too, so reversing at an edge never has to consume invisible excess movement.
+    let limit = (node.content_size() - node.size() + node.scrollbar_size).max(Vec2::ZERO)
+        * node.inverse_scale_factor();
+    if horizontal {
+        scroll.x = (scroll.x.clamp(0.0, limit.x) + delta).clamp(0.0, limit.x);
+    } else {
+        scroll.y = (scroll.y.clamp(0.0, limit.y) + delta).clamp(0.0, limit.y);
     }
 }
 

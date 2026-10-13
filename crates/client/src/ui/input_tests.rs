@@ -4,7 +4,7 @@ use bevy::{
     ecs::message::MessageCursor,
     input::{
         ButtonState, InputPlugin,
-        mouse::MouseButtonInput,
+        mouse::{MouseButtonInput, MouseScrollUnit, MouseWheel},
         touch::{TouchInput, TouchPhase},
     },
     input_focus::{InputDispatchPlugin, InputFocusPlugin},
@@ -17,7 +17,7 @@ use bevy::{
 use crate::{
     gameplay::{
         Activate,
-        presentation::{DisabledControl, OverlayRoot},
+        presentation::{DisabledControl, OverlayRoot, ScrollPane},
     },
     screens::Screen,
 };
@@ -325,4 +325,121 @@ fn footer_pass_stays_active_outside_nonmodal_hand_tray() {
         &[ButtonState::Pressed, ButtonState::Released],
     );
     assert_eq!(commands(&mut app), vec![Control::Pass]);
+}
+
+fn scrolling_pane(app: &mut App, window: Entity, horizontal: bool, scale_factor: f32) -> Entity {
+    {
+        let mut window = app.world_mut().get_mut::<Window>(window).expect("window");
+        window
+            .resolution
+            .set_scale_factor_override(Some(scale_factor));
+        window.resolution.set(375.0, 667.0);
+    }
+    app.world_mut()
+        .spawn((
+            Node::default(),
+            ScrollPane { horizontal },
+            ScrollPosition::default(),
+            ComputedNode {
+                size: Vec2::new(100.0, 50.0) * scale_factor,
+                content_size: if horizontal {
+                    Vec2::new(300.0, 50.0) * scale_factor
+                } else {
+                    Vec2::new(100.0, 250.0) * scale_factor
+                },
+                inverse_scale_factor: scale_factor.recip(),
+                ..default()
+            },
+            UiGlobalTransform::from(Affine2::from_translation(
+                Vec2::new(100.0, 100.0) * scale_factor,
+            )),
+        ))
+        .id()
+}
+
+#[test]
+fn repeated_touch_swipes_stop_at_content_edge_and_reverse_immediately_at_high_dpi() {
+    for scale_factor in [1.0, 2.0] {
+        let (mut app, window) = fixture();
+        let pane = scrolling_pane(&mut app, window, true, scale_factor);
+        for id in 1..=4 {
+            touch(
+                &mut app,
+                window,
+                id,
+                TouchPhase::Started,
+                Vec2::new(140.0, 100.0),
+            );
+            touch(
+                &mut app,
+                window,
+                id,
+                TouchPhase::Ended,
+                Vec2::new(60.0, 100.0),
+            );
+            app.update();
+        }
+        assert_eq!(
+            app.world()
+                .get::<ScrollPosition>(pane)
+                .expect("pane")
+                .x
+                .to_bits(),
+            200.0_f32.to_bits()
+        );
+        touch(
+            &mut app,
+            window,
+            5,
+            TouchPhase::Started,
+            Vec2::new(60.0, 100.0),
+        );
+        touch(
+            &mut app,
+            window,
+            5,
+            TouchPhase::Ended,
+            Vec2::new(100.0, 100.0),
+        );
+        app.update();
+        assert_eq!(
+            app.world()
+                .get::<ScrollPosition>(pane)
+                .expect("pane")
+                .x
+                .to_bits(),
+            160.0_f32.to_bits()
+        );
+        assert!(commands(&mut app).is_empty());
+    }
+}
+
+#[test]
+fn wheel_scroll_stops_at_content_edge_and_reverses_without_a_dead_zone() {
+    for scale_factor in [1.0, 2.0] {
+        let (mut app, window) = fixture();
+        let pane = scrolling_pane(&mut app, window, false, scale_factor);
+        app.world_mut()
+            .get_mut::<Window>(window)
+            .expect("window")
+            .set_cursor_position(Some(Vec2::new(100.0, 100.0)));
+        for (delta, expected) in [(-800.0, 200.0_f32), (30.0, 170.0)] {
+            app.world_mut().write_message(MouseWheel {
+                unit: MouseScrollUnit::Pixel,
+                x: 0.0,
+                y: delta,
+                window,
+                phase: TouchPhase::Moved,
+            });
+            app.update();
+            assert_eq!(
+                app.world()
+                    .get::<ScrollPosition>(pane)
+                    .expect("pane")
+                    .y
+                    .to_bits(),
+                expected.to_bits()
+            );
+        }
+    }
 }

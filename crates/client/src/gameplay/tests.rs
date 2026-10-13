@@ -11,13 +11,20 @@ use bevy::{
     time::TimeUpdateStrategy,
     window::PrimaryWindow,
 };
-use low_kingdoms_battle::{ai, content::Content, session::Session};
+use low_kingdoms_battle::{
+    ai::{self, AiError},
+    content::Content,
+    session::{Session, SessionError},
+};
 use low_kingdoms_rules::{
     command::{AttackTarget, Command},
-    model::{CardId, Outcome, Phase, PlayerId},
+    error::Error as RulesError,
+    model::{CardId, DefinitionId, Outcome, Phase, PlayerId},
 };
 
-use super::{Activate, Battle, LocalSave, Panel, Runtime, Speed};
+use super::{
+    Activate, Battle, LocalSave, Panel, Runtime, Speed, fail_session, session_error_category,
+};
 use crate::{
     app::ClientPlugin,
     platform::{
@@ -320,6 +327,45 @@ fn play_initializes_real_mulligan_and_saves_without_frame_write_spam() {
     );
     assert_unique_screen(&mut app, Screen::Battle);
     assert_eq!(store.0.lock().expect("slot").writes, 3);
+}
+
+#[test]
+fn session_failure_diagnostics_classify_without_ids_and_preserve_valid_state() {
+    let (mut app, _) = resume_fixture(42, None, Speed::Instant);
+    let before = session_save(&app);
+    let missing = SessionError::Ai(AiError::MissingVisibleCard(CardId(u64::MAX)));
+    assert_eq!(
+        session_error_category(&missing),
+        session_error_category(&SessionError::Ai(AiError::MissingVisibleCard(CardId(1))))
+    );
+    assert_eq!(
+        session_error_category(&SessionError::Ai(AiError::UnknownDefinition(DefinitionId(
+            u32::MAX
+        )))),
+        session_error_category(&SessionError::Ai(AiError::UnknownDefinition(DefinitionId(
+            1
+        ))))
+    );
+    assert_ne!(
+        session_error_category(&missing),
+        session_error_category(&SessionError::Ai(AiError::NoLegalCommand))
+    );
+    assert_ne!(
+        session_error_category(&SessionError::Rules(RulesError::WrongPhase)),
+        session_error_category(&SessionError::Rules(RulesError::InvalidCard))
+    );
+    fail_session(
+        &mut app.world_mut().resource_mut::<Battle>(),
+        "ai_command",
+        &missing,
+    );
+    assert_eq!(session_save(&app), before);
+    let battle = app.world().resource::<Battle>();
+    assert_eq!(battle.panel, Panel::Error);
+    assert_eq!(
+        battle.error.as_deref(),
+        Some("The opponent could not choose an action.")
+    );
 }
 
 #[test]
