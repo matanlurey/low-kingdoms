@@ -13,6 +13,13 @@ test-support = []
 
 [dependencies]
 bevy.workspace = true
+low-kingdoms-rules.workspace = true
+low-kingdoms-battle.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+getrandom.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen.workspace = true

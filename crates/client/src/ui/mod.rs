@@ -1,5 +1,6 @@
 use bevy::{
     app::AppExit,
+    ecs::system::SystemParam,
     input_focus::{
         FocusCause, InputFocus, InputFocusVisible,
         tab_navigation::{TabIndex, TabNavigationPlugin},
@@ -20,6 +21,30 @@ pub(crate) enum Control {
     About,
     Back,
     Quit,
+    Play,
+    Resume,
+    ConfirmReplace,
+    Cancel,
+    KeepHand,
+    Mulligan,
+    ConfirmResources,
+    Pass,
+    More,
+    Hand,
+    Log,
+    Resources,
+    Close,
+    PlayUnit,
+    AttackUnit,
+    ClaimInitiative,
+    SpeedNormal,
+    SpeedFast,
+    SpeedInstant,
+    PlayAgain,
+    MainMenu,
+    Retry,
+    Card(low_kingdoms_rules::model::CardId),
+    EnemyStronghold,
 }
 
 impl Control {
@@ -28,16 +53,65 @@ impl Control {
             Self::About => "About",
             Self::Back => "Back",
             Self::Quit => "Quit",
+            Self::Play => "Play",
+            Self::Resume => "Resume Battle",
+            Self::ConfirmReplace => "Replace saved battle",
+            Self::Cancel => "Cancel",
+            Self::KeepHand => "Keep Hand",
+            Self::Mulligan => "Mulligan",
+            Self::ConfirmResources => "Confirm Resources",
+            Self::Pass => "Pass",
+            Self::More => "More",
+            Self::Hand => "Hand",
+            Self::Log => "Log",
+            Self::Resources => "Resources",
+            Self::Close => "Close",
+            Self::PlayUnit => "Play Unit",
+            Self::AttackUnit => "Attack",
+            Self::ClaimInitiative => "Claim Initiative",
+            Self::SpeedNormal => "Normal (750 ms)",
+            Self::SpeedFast => "Fast (150 ms)",
+            Self::SpeedInstant => "Instant",
+            Self::PlayAgain => "Play Again",
+            Self::MainMenu => "Main Menu",
+            Self::Retry => "Retry",
+            Self::Card(_) => "Inspect card",
+            Self::EnemyStronghold => "Enemy Stronghold",
         }
     }
 
     #[cfg(all(feature = "test-support", target_arch = "wasm32"))]
-    pub(crate) const fn id(self) -> &'static str {
+    pub(crate) fn id(self) -> String {
         match self {
+            Self::Card(id) => return format!("card-{}", id.0),
             Self::About => "about",
             Self::Back => "back",
             Self::Quit => "quit",
+            Self::Play => "play",
+            Self::Resume => "resume",
+            Self::ConfirmReplace => "confirm-replace",
+            Self::Cancel => "cancel",
+            Self::KeepHand => "keep-hand",
+            Self::Mulligan => "mulligan",
+            Self::ConfirmResources => "confirm-resources",
+            Self::Pass => "pass",
+            Self::More => "more",
+            Self::Hand => "hand",
+            Self::Log => "log",
+            Self::Resources => "resources",
+            Self::Close => "close",
+            Self::PlayUnit => "play-unit",
+            Self::AttackUnit => "attack-unit",
+            Self::ClaimInitiative => "claim-initiative",
+            Self::SpeedNormal => "speed-normal",
+            Self::SpeedFast => "speed-fast",
+            Self::SpeedInstant => "speed-instant",
+            Self::PlayAgain => "play-again",
+            Self::MainMenu => "main-menu",
+            Self::Retry => "retry",
+            Self::EnemyStronghold => "enemy-stronghold",
         }
+        .to_owned()
     }
 }
 
@@ -84,9 +158,16 @@ pub(crate) struct UiInteractionPlugin;
 impl Plugin for UiInteractionPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(TabNavigationPlugin)
+            .init_resource::<Gesture>()
             .add_systems(
                 Update,
-                (activate_pointer, activate_keyboard, style_controls).chain(),
+                (
+                    scroll_input,
+                    activate_pointer,
+                    activate_keyboard,
+                    style_controls,
+                )
+                    .chain(),
             )
             .add_systems(Update, responsive_layout);
     }
@@ -127,19 +208,192 @@ pub(crate) fn control(control: Control, tab_index: i32) -> impl Bundle {
     )
 }
 
-fn activate_pointer(
-    controls: Query<(Entity, &Control, &Interaction), Changed<Interaction>>,
-    mut focus: ResMut<InputFocus>,
-    mut visible: ResMut<InputFocusVisible>,
-    mut next: ResMut<NextState<Screen>>,
-    mut exit: MessageWriter<AppExit>,
-) {
+#[derive(Resource, Default)]
+struct Gesture {
+    pending: Option<(Entity, Control)>,
+    origin: Option<Vec2>,
+    previous: Option<Vec2>,
+    pane: Option<Entity>,
+    dragged: bool,
+}
+
+#[derive(SystemParam)]
+struct ScrollInput<'w, 's> {
+    window: Single<'w, 's, &'static Window>,
+    mouse: Res<'w, ButtonInput<MouseButton>>,
+    touches: Res<'w, Touches>,
+    wheel: MessageReader<'w, 's, bevy::input::mouse::MouseWheel>,
+    gesture: ResMut<'w, Gesture>,
+    panes: Query<
+        'w,
+        's,
+        (
+            Entity,
+            &'static ComputedNode,
+            &'static UiGlobalTransform,
+            &'static crate::gameplay::presentation::ScrollPane,
+            &'static mut ScrollPosition,
+        ),
+    >,
+    parents: Query<'w, 's, &'static ChildOf>,
+    overlays: Query<'w, 's, Entity, With<crate::gameplay::presentation::OverlayRoot>>,
+}
+
+fn scroll_input(data: ScrollInput) {
+    let ScrollInput {
+        window,
+        mouse,
+        touches,
+        mut wheel,
+        mut gesture,
+        mut panes,
+        parents,
+        overlays,
+    } = data;
+    let position = touches
+        .first_pressed_position()
+        .or_else(|| window.cursor_position());
+    let started = mouse.just_pressed(MouseButton::Left) || touches.any_just_pressed();
+    if started {
+        gesture.origin = position;
+        gesture.previous = position;
+        gesture.dragged = false;
+        gesture.pane = position.and_then(|position| {
+            panes
+                .iter()
+                .filter(|(entity, node, transform, _, _)| {
+                    if !active_surface(*entity, &parents, &overlays) {
+                        return false;
+                    }
+                    let center = transform.translation * node.inverse_scale_factor();
+                    Rect::from_center_size(center, node.size() * node.inverse_scale_factor())
+                        .contains(position)
+                })
+                .min_by_key(|(_, node, _, _, _)| (node.size().x * node.size().y).to_bits())
+                .map(|(entity, ..)| entity)
+        });
+    }
+    if (mouse.pressed(MouseButton::Left) || touches.iter().next().is_some())
+        && let Some(position) = position
+    {
+        if gesture
+            .origin
+            .is_some_and(|origin| origin.distance(position) > 8.0)
+        {
+            gesture.dragged = true;
+        }
+        if gesture.dragged
+            && let (Some(entity), Some(previous)) = (gesture.pane, gesture.previous)
+            && let Ok((_, _, _, pane, mut scroll)) = panes.get_mut(entity)
+        {
+            let delta = previous - position;
+            if pane.horizontal {
+                scroll.x = (scroll.x + delta.x).max(0.0);
+            } else {
+                scroll.y = (scroll.y + delta.y).max(0.0);
+            }
+        }
+        gesture.previous = Some(position);
+    }
+    for event in wheel.read() {
+        if let Some(position) = position {
+            for (entity, node, transform, pane, mut scroll) in &mut panes {
+                if !active_surface(entity, &parents, &overlays) {
+                    continue;
+                }
+                let center = transform.translation * node.inverse_scale_factor();
+                if Rect::from_center_size(center, node.size() * node.inverse_scale_factor())
+                    .contains(position)
+                {
+                    let factor = if matches!(event.unit, bevy::input::mouse::MouseScrollUnit::Line)
+                    {
+                        36.0
+                    } else {
+                        1.0
+                    };
+                    if pane.horizontal {
+                        scroll.x = (event.y + event.x).mul_add(-factor, scroll.x).max(0.0);
+                    } else {
+                        scroll.y = event.y.mul_add(-factor, scroll.y).max(0.0);
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn active_surface(
+    mut entity: Entity,
+    parents: &Query<&ChildOf>,
+    overlays: &Query<Entity, With<crate::gameplay::presentation::OverlayRoot>>,
+) -> bool {
+    if overlays.is_empty() {
+        return true;
+    }
+    loop {
+        if overlays.get(entity).is_ok() {
+            return true;
+        }
+        let Ok(parent) = parents.get(entity) else {
+            return false;
+        };
+        entity = parent.parent();
+    }
+}
+
+type PointerControls<'w, 's> = Query<
+    'w,
+    's,
+    (Entity, &'static Control, &'static Interaction),
+    (
+        Changed<Interaction>,
+        Without<crate::gameplay::presentation::DisabledControl>,
+    ),
+>;
+
+#[derive(SystemParam)]
+struct PointerContext<'w> {
+    focus: ResMut<'w, InputFocus>,
+    visible: ResMut<'w, InputFocusVisible>,
+    next: ResMut<'w, NextState<Screen>>,
+    exit: MessageWriter<'w, AppExit>,
+    messages: MessageWriter<'w, crate::gameplay::Activate>,
+    gesture: ResMut<'w, Gesture>,
+    mouse: Res<'w, ButtonInput<MouseButton>>,
+    touches: Res<'w, Touches>,
+}
+
+fn activate_pointer(controls: PointerControls, context: PointerContext) {
+    let PointerContext {
+        mut focus,
+        mut visible,
+        mut next,
+        mut exit,
+        mut messages,
+        mut gesture,
+        mouse,
+        touches,
+    } = context;
     for (entity, control, interaction) in &controls {
         if *interaction == Interaction::Pressed {
             focus.set(entity, FocusCause::Pressed);
             visible.0 = false;
-            activate(*control, &mut next, &mut exit);
+            if matches!(control, Control::About | Control::Back | Control::Quit) {
+                activate(*control, &mut next, &mut exit, &mut messages);
+            } else {
+                gesture.pending = Some((entity, *control));
+            }
         }
+    }
+    if mouse.just_released(MouseButton::Left) || touches.iter_just_released().next().is_some() {
+        if !gesture.dragged {
+            if let Some((_, control)) = gesture.pending.take() {
+                activate(control, &mut next, &mut exit, &mut messages);
+            } else {
+                messages.write(crate::gameplay::Activate(Control::Close));
+            }
+        }
+        gesture.pending = None;
     }
 }
 
@@ -150,48 +404,81 @@ fn activate_pointer(
 fn activate_keyboard(
     keys: Res<ButtonInput<KeyCode>>,
     focus: Res<InputFocus>,
-    controls: Query<&Control>,
+    controls: Query<&Control, Without<crate::gameplay::presentation::DisabledControl>>,
     state: Res<State<Screen>>,
     mut next: ResMut<NextState<Screen>>,
     mut exit: MessageWriter<AppExit>,
+    mut messages: MessageWriter<crate::gameplay::Activate>,
 ) {
     if keys.just_pressed(KeyCode::Escape) && *state.get() == Screen::About {
         next.set(Screen::Title);
+    } else if keys.just_pressed(KeyCode::Escape)
+        && matches!(
+            state.get(),
+            Screen::Battle | Screen::Mulligan | Screen::Results
+        )
+    {
+        messages.write(crate::gameplay::Activate(Control::Close));
     } else if (keys.just_pressed(KeyCode::Enter) || keys.just_pressed(KeyCode::Space))
         && let Some(entity) = focus.get()
         && let Ok(control) = controls.get(entity)
     {
-        activate(*control, &mut next, &mut exit);
+        activate(*control, &mut next, &mut exit, &mut messages);
     }
 }
 
-fn activate(control: Control, next: &mut NextState<Screen>, exit: &mut MessageWriter<AppExit>) {
+fn activate(
+    control: Control,
+    next: &mut NextState<Screen>,
+    exit: &mut MessageWriter<AppExit>,
+    messages: &mut MessageWriter<crate::gameplay::Activate>,
+) {
     match control {
         Control::About => next.set(Screen::About),
         Control::Back => next.set(Screen::Title),
         Control::Quit => {
             exit.write(AppExit::Success);
         }
+        _ => {
+            messages.write(crate::gameplay::Activate(control));
+        }
     }
 }
 
+type StyledControls<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Interaction,
+        &'static mut BackgroundColor,
+        &'static mut BorderColor,
+        Option<&'static crate::gameplay::presentation::DisabledControl>,
+    ),
+    (
+        With<Control>,
+        Without<crate::gameplay::presentation::CardFace>,
+    ),
+>;
+
 #[expect(
     clippy::needless_pass_by_value,
-    reason = "Bevy injects owned Res system parameters."
+    reason = "Bevy injects owned resource borrows."
 )]
 fn style_controls(
     focus: Res<InputFocus>,
     visible: Res<InputFocusVisible>,
-    mut controls: Query<
-        (Entity, &Interaction, &mut BackgroundColor, &mut BorderColor),
-        With<Control>,
-    >,
+    mut controls: StyledControls,
 ) {
-    for (entity, interaction, mut background, mut border) in &mut controls {
-        *background = match interaction {
-            Interaction::Pressed => theme::PRESSED,
-            Interaction::Hovered => theme::HOVER,
-            Interaction::None => theme::BUTTON,
+    for (entity, interaction, mut background, mut border, disabled) in &mut controls {
+        *background = if disabled.is_some() {
+            theme::BACKGROUND
+        } else {
+            match interaction {
+                Interaction::Pressed => theme::PRESSED,
+                Interaction::Hovered => theme::HOVER,
+                Interaction::None => theme::BUTTON,
+            }
         }
         .into();
         *border = BorderColor::all(if focus.get() == Some(entity) && visible.0 {

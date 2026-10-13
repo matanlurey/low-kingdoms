@@ -19,6 +19,7 @@ use crate::{
 
 fn test_app(supports_quit: bool) -> App {
     let mut app = App::new();
+    crate::gameplay::tests::install_empty_store(&mut app);
     app.add_plugins((
         MinimalPlugins,
         StatesPlugin,
@@ -104,6 +105,7 @@ fn initializes_one_title_with_real_controls_and_text() {
         .collect();
     assert!(texts.contains(&"Low Kingdoms"));
     assert!(texts.contains(&"Early development build"));
+    assert!(texts.contains(&"Play"));
     assert!(texts.contains(&"About"));
     assert!(texts.contains(&"Quit"));
     assert_eq!(
@@ -111,7 +113,7 @@ fn initializes_one_title_with_real_controls_and_text() {
             .query::<&Control>()
             .iter(app.world())
             .count(),
-        2
+        3
     );
 }
 
@@ -153,7 +155,7 @@ fn production_navigation_repeatedly_cleans_screen_descendants() {
             app.world_mut()
                 .query::<&Text>()
                 .iter(app.world())
-                .any(|text| text.0 == "Early development build. Gameplay is not implemented.")
+                .any(|text| text.0 == "Playable battle prototype against a basic AI.")
         );
         let old_about = nodes(&mut app);
         press_control(&mut app, Control::Back);
@@ -191,8 +193,8 @@ fn browser_configuration_has_no_quit_control() {
 fn actual_keyboard_tab_shift_tab_and_activation_navigate() {
     let mut app = test_app(true);
     tap(&mut app, KeyCode::Tab);
-    let about = control_entity(&mut app, Control::About);
-    assert_eq!(app.world().resource::<InputFocus>().get(), Some(about));
+    let play = control_entity(&mut app, Control::Play);
+    assert_eq!(app.world().resource::<InputFocus>().get(), Some(play));
     assert!(app.world().resource::<InputFocusVisible>().0);
     key(&mut app, KeyCode::ShiftLeft, ButtonState::Pressed);
     tap(&mut app, KeyCode::Tab);
@@ -200,6 +202,10 @@ fn actual_keyboard_tab_shift_tab_and_activation_navigate() {
     let quit = control_entity(&mut app, Control::Quit);
     assert_eq!(app.world().resource::<InputFocus>().get(), Some(quit));
     tap(&mut app, KeyCode::Tab);
+    assert_eq!(app.world().resource::<InputFocus>().get(), Some(play));
+    tap(&mut app, KeyCode::Tab);
+    let about = control_entity(&mut app, Control::About);
+    assert_eq!(app.world().resource::<InputFocus>().get(), Some(about));
     tap(&mut app, KeyCode::Enter);
     assert_screen(&mut app, Screen::About);
     tap(&mut app, KeyCode::Tab);

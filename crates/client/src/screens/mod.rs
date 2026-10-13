@@ -17,6 +17,9 @@ pub(crate) enum Screen {
     #[default]
     Title,
     About,
+    Mulligan,
+    Battle,
+    Results,
 }
 
 #[derive(Component)]
@@ -60,16 +63,24 @@ fn clear_focus(mut focus: ResMut<InputFocus>) {
     clippy::needless_pass_by_value,
     reason = "Bevy injects owned Res system parameters."
 )]
-fn spawn_title(mut commands: Commands, platform: Res<PresentationPlatform>) {
+fn spawn_title(
+    mut commands: Commands,
+    platform: Res<PresentationPlatform>,
+    battle: Res<crate::gameplay::Battle>,
+) {
     let root = root(&mut commands, Screen::Title);
     commands.entity(root).with_children(|parent| {
         parent.spawn(panel()).with_children(|panel| {
             panel.spawn(text("Low Kingdoms", TextRole::Heading));
             panel.spawn(text("Early development build", TextRole::Body));
             panel.spawn(divider());
-            panel.spawn(crate::ui::control(Control::About, 0));
+            panel.spawn(crate::ui::control(Control::Play, 0));
+            if battle.resume_available {
+                panel.spawn(crate::ui::control(Control::Resume, 1));
+            }
+            panel.spawn(crate::ui::control(Control::About, 2));
             if platform.supports_quit {
-                panel.spawn(crate::ui::control(Control::Quit, 1));
+                panel.spawn(crate::ui::control(Control::Quit, 3));
             }
             panel.spawn(text("Tab to move / Enter to select", TextRole::Caption));
         });
@@ -87,7 +98,7 @@ fn spawn_about(mut commands: Commands) {
             ));
             panel.spawn(divider());
             panel.spawn(text(
-                "Early development build. Gameplay is not implemented.",
+                "Playable battle prototype against a basic AI.",
                 TextRole::Body,
             ));
             panel.spawn(crate::ui::control(Control::Back, 0));

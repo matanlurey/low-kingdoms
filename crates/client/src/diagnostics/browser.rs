@@ -1,6 +1,5 @@
-use std::fmt::Write as _;
-
 use bevy::{
+    ecs::system::SystemParam,
     input_focus::{InputFocus, InputFocusVisible},
     prelude::*,
 };
@@ -16,69 +15,92 @@ extern "C" {
     fn publish_json(json: &str);
 }
 
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "Bevy injects the owned Res and Single system parameters."
-)]
-pub(super) fn publish_snapshot(
-    state: Res<State<Screen>>,
-    readiness: Res<PresentationReady>,
-    focus: Res<InputFocus>,
-    visible: Res<InputFocusVisible>,
-    window: Single<&Window>,
-    controls: Query<(Entity, &Control, &ComputedNode, &UiGlobalTransform)>,
-    texts: Query<(&Text, &ComputedNode, &UiGlobalTransform)>,
-) {
-    let mut control_json = String::new();
-    let mut focused_control = "null".to_owned();
-    for (entity, control, node, transform) in &controls {
-        if !control_json.is_empty() {
-            control_json.push(',');
-        }
+type ControlNodes<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Control,
+        &'static ComputedNode,
+        &'static UiGlobalTransform,
+        Option<&'static CalculatedClip>,
+        Option<&'static crate::gameplay::presentation::DisabledControl>,
+    ),
+>;
+
+#[derive(SystemParam)]
+pub(super) struct SnapshotData<'w, 's> {
+    state: Res<'w, State<Screen>>,
+    readiness: Res<'w, PresentationReady>,
+    focus: Res<'w, InputFocus>,
+    visible: Res<'w, InputFocusVisible>,
+    window: Single<'w, 's, &'static Window>,
+    battle: Res<'w, crate::gameplay::Battle>,
+    parents: Query<'w, 's, &'static ChildOf>,
+    overlays: Query<'w, 's, Entity, With<crate::gameplay::presentation::OverlayRoot>>,
+    controls: ControlNodes<'w, 's>,
+    texts: Query<
+        'w,
+        's,
+        (
+            &'static Text,
+            &'static ComputedNode,
+            &'static UiGlobalTransform,
+        ),
+    >,
+    panes: Query<
+        'w,
+        's,
+        (
+            Entity,
+            &'static ComputedNode,
+            &'static UiGlobalTransform,
+            &'static ScrollPosition,
+            &'static crate::gameplay::presentation::ScrollPane,
+        ),
+    >,
+}
+
+pub(super) fn publish_snapshot(data: SnapshotData) {
+    let SnapshotData {
+        state,
+        readiness,
+        focus,
+        visible,
+        window,
+        battle,
+        controls,
+        parents,
+        overlays,
+        texts,
+        panes,
+    } = data;
+    let mut focused_control = None;
+    let control_json: Vec<_> = controls.iter().map(|(entity, control, node, transform, clip, disabled)| {
         let focused = focus.get() == Some(entity);
-        if focused {
-            focused_control = json_string(control.id());
-        }
+        if focused { focused_control = Some(control.id()); }
         let (position, size) = logical_rect(node, transform);
-        let _ = write!(
-            control_json,
-            "{{\"id\":{},\"label\":{},\"x\":{},\"y\":{},\"width\":{},\"height\":{},\"focused\":{focused}}}",
-            json_string(control.id()),
-            json_string(control.label()),
-            position.x,
-            position.y,
-            size.x,
-            size.y
-        );
-    }
-    let mut text_json = String::new();
-    for (text, node, transform) in &texts {
-        if !text_json.is_empty() {
-            text_json.push(',');
-        }
-        let (position, size) = logical_rect(node, transform);
-        let _ = write!(
-            text_json,
-            "{{\"text\":{},\"x\":{},\"y\":{},\"width\":{},\"height\":{}}}",
-            json_string(&text.0),
-            position.x,
-            position.y,
-            size.x,
-            size.y
-        );
-    }
+        let rectangle = Rect::from_corners(position, position + size);
+        let clipped = clip.map_or(rectangle, |clip| rectangle.intersect(Rect::from_corners(clip.clip.min * node.inverse_scale_factor(), clip.clip.max * node.inverse_scale_factor())));
+        serde_json::json!({ "id": control.id(), "label": control.label(), "x":position.x,"y":position.y,"width":size.x,"height":size.y,"focused":focused,"enabled":disabled.is_none(),"visible":active_surface(entity, &parents, &overlays) && clipped.width()>0.0 && clipped.height()>0.0,"visibleRect":{"x":clipped.min.x,"y":clipped.min.y,"width":clipped.width().max(0.0),"height":clipped.height().max(0.0)} })
+    }).collect();
+    let text_json: Vec<_> = texts.iter().map(|(text,node,transform)| {
+        let (position,size)=logical_rect(node,transform);
+        serde_json::json!({"text":text.0,"x":position.x,"y":position.y,"width":size.x,"height":size.y})
+    }).collect();
+    let scroll_json: Vec<_> = panes.iter().map(|(entity,node,transform,scroll,pane)| {
+        let (position,size)=logical_rect(node,transform);
+        serde_json::json!({"x":position.x,"y":position.y,"width":size.x,"height":size.y,"offsetX":scroll.x,"offsetY":scroll.y,"horizontal":pane.horizontal,"visible":active_surface(entity,&parents,&overlays)})
+    }).collect();
     let screen = match state.get() {
         Screen::Title => "title",
         Screen::About => "about",
+        Screen::Mulligan => "mulligan",
+        Screen::Battle => "battle",
+        Screen::Results => "results",
     };
-    publish_json(&format!(
-        "{{\"ready\":{},\"screen\":\"{screen}\",\"focusedControl\":{focused_control},\"focusVisible\":{},\"viewport\":{{\"width\":{},\"height\":{},\"scaleFactor\":{}}},\"controls\":[{control_json}],\"texts\":[{text_json}]}}",
-        readiness.ready,
-        visible.0,
-        window.width(),
-        window.height(),
-        window.scale_factor()
-    ));
+    let payload = serde_json::json!({"ready":readiness.ready,"screen":screen,"focusedControl":focused_control,"focusVisible":visible.0,"viewport":{"width":window.width(),"height":window.height(),"scaleFactor":window.scale_factor()},"controls":control_json,"texts":text_json,"battle":{"view":battle.view,"legal":battle.legal,"catalog":battle.catalog,"history":battle.history,"selected":battle.selected,"attacker":battle.attacker,"resources":battle.resource_selection,"panel":format!("{:?}",battle.panel),"speed":format!("{:?}",battle.speed),"revision":battle.revision,"resumeAvailable":battle.resume_available,"error":battle.error,"scrollRegions":scroll_json}});
+    publish_json(&payload.to_string());
 }
 
 fn logical_rect(node: &ComputedNode, transform: &UiGlobalTransform) -> (Vec2, Vec2) {
@@ -87,21 +109,21 @@ fn logical_rect(node: &ComputedNode, transform: &UiGlobalTransform) -> (Vec2, Ve
     (center - size * 0.5, size)
 }
 
-fn json_string(value: &str) -> String {
-    let mut escaped = String::from("\"");
-    for character in value.chars() {
-        match character {
-            '"' => escaped.push_str("\\\""),
-            '\\' => escaped.push_str("\\\\"),
-            '\n' => escaped.push_str("\\n"),
-            '\r' => escaped.push_str("\\r"),
-            '\t' => escaped.push_str("\\t"),
-            character if character.is_control() => {
-                let _ = write!(escaped, "\\u{:04x}", u32::from(character));
-            }
-            character => escaped.push(character),
-        }
+fn active_surface(
+    mut entity: Entity,
+    parents: &Query<&ChildOf>,
+    overlays: &Query<Entity, With<crate::gameplay::presentation::OverlayRoot>>,
+) -> bool {
+    if overlays.is_empty() {
+        return true;
     }
-    escaped.push('"');
-    escaped
+    loop {
+        if overlays.get(entity).is_ok() {
+            return true;
+        }
+        let Ok(parent) = parents.get(entity) else {
+            return false;
+        };
+        entity = parent.parent();
+    }
 }

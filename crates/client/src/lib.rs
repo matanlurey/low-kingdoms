@@ -4,6 +4,7 @@ pub mod app;
 
 #[cfg(feature = "test-support")]
 mod diagnostics;
+mod gameplay;
 mod platform;
 mod screens;
 mod ui;
