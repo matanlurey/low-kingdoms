@@ -856,7 +856,15 @@ fn advance_ai(
     if capture_pause.is_some_and(|pause| pause.0) {
         return;
     }
-    if !matches!(state.get(), Screen::Mulligan | Screen::Battle) || battle.error.is_some() {
+    let leaving_battle = matches!(
+        &*next,
+        NextState::Pending(screen) | NextState::PendingIfNeq(screen)
+            if !matches!(screen, Screen::Mulligan | Screen::Battle)
+    );
+    if leaving_battle
+        || !matches!(state.get(), Screen::Mulligan | Screen::Battle)
+        || battle.error.is_some()
+    {
         runtime.ai_clock.wait = 0.0;
         return;
     }

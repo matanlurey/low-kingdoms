@@ -15,23 +15,26 @@ use crate::ui::{Control, theme};
 use super::super::{Battle, Panel, Speed};
 use super::{DisabledControl, Layout, OverlayRoot, Presentation, layout, visible_card};
 
+#[derive(Component, Clone, Copy)]
+struct MoreControls {
+    claim: Entity,
+    speed_label: Entity,
+    speeds: [(Entity, Speed); 3],
+}
+
 pub(super) fn reconcile(
     world: &mut World,
     presentation: &mut Presentation,
     battle: &Battle,
     layout: Layout,
 ) {
-    let stamp = format!(
-        "{:?}/{:?}/{:?}/{:?}/{}/{:?}/{}",
-        battle.panel,
-        battle.selected,
-        battle.resource_selection,
-        battle.speed,
-        battle.revision,
-        battle.error,
-        layout.compact
-    );
+    let stamp = panel_stamp(battle, layout);
     if presentation.overlay_stamp == stamp {
+        if battle.panel == Panel::More
+            && let Some(content) = presentation.overlay_content
+        {
+            update_more(world, content, battle);
+        }
         return;
     }
     let position = if presentation.overlay_panel == Some(battle.panel) {
@@ -81,6 +84,55 @@ pub(super) fn reconcile(
     if let Some(mut focus) = world.get_resource_mut::<InputFocus>() {
         focus.set(close, FocusCause::Navigated);
     }
+}
+
+fn panel_stamp(battle: &Battle, layout: Layout) -> String {
+    // A private buffered decision changes the session revision without changing
+    // anything displayed here. It must not replace the entity held by a pointer.
+    let contents = match battle.panel {
+        Panel::None | Panel::More => String::new(),
+        Panel::Hand => format!(
+            "{:?}/{:?}/{:?}/{}",
+            battle
+                .view
+                .as_ref()
+                .map(|view| (&view.hand, view.phase, view.decision_submitted)),
+            battle.resource_selection,
+            battle.catalog,
+            enabled(Control::ConfirmResources, battle),
+        ),
+        Panel::Log => format!("{:?}", battle.history),
+        Panel::Resources => format!(
+            "{:?}/{:?}/{:?}",
+            battle.view.as_ref().map(|view| (
+                &view.resources,
+                &view.players[0].resources,
+                &view.players[1].resources,
+                &view.players[0].discard,
+                &view.players[1].discard,
+            )),
+            battle.resource_selection,
+            battle.catalog,
+        ),
+        Panel::Inspect => format!(
+            "{:?}/{:?}/{:?}/{:?}/{}/{}",
+            battle.selected,
+            battle.selected.and_then(|id| visible_card(battle, id)),
+            battle.view.as_ref().map(|view| (
+                view.player,
+                view.phase,
+                battle
+                    .selected
+                    .is_some_and(|id| view.hand.iter().any(|card| card.id == id)),
+            )),
+            battle.catalog,
+            enabled(Control::PlayUnit, battle),
+            enabled(Control::AttackUnit, battle),
+        ),
+        Panel::Replace => format!("{}/{}", battle.resume_available, battle.notification),
+        Panel::Error => format!("{:?}", battle.error),
+    };
+    format!("{:?}/{}/{contents}", battle.panel, layout.compact)
 }
 
 fn surface(
@@ -192,7 +244,13 @@ fn header(world: &mut World, parent: Entity, panel: Panel) -> Entity {
 }
 
 fn more(world: &mut World, parent: Entity, battle: &Battle) {
-    contextual_button(world, parent, Control::ClaimInitiative, battle);
+    let claim = button(
+        world,
+        parent,
+        Control::ClaimInitiative,
+        Control::ClaimInitiative.label(),
+        enabled(Control::ClaimInitiative, battle),
+    );
     layout::text(
         world,
         parent,
@@ -200,7 +258,7 @@ fn more(world: &mut World, parent: Entity, battle: &Battle) {
         14.0,
         theme::SECONDARY,
     );
-    layout::text(
+    let speed_label = layout::text(
         world,
         parent,
         format!("AI speed: {:?}", battle.speed),
@@ -216,24 +274,55 @@ fn more(world: &mut World, parent: Entity, battle: &Battle) {
             ..default()
         },
     );
-    for (control, speed, label) in [
+    let speeds = [
         (Control::SpeedNormal, Speed::Normal, "Normal\n750 ms"),
         (Control::SpeedFast, Speed::Fast, "Fast\n150 ms"),
         (Control::SpeedInstant, Speed::Instant, "Instant"),
-    ] {
+    ]
+    .map(|(control, speed, label)| {
         let entity = button(world, row, control, label, true);
         if let Some(mut node) = world.get_mut::<Node>(entity) {
             node.flex_grow = 1.0;
             node.flex_basis = px(0);
             node.min_width = px(44);
         }
-        if battle.speed == speed {
-            world
-                .entity_mut(entity)
-                .insert(BorderColor::all(theme::ACCENT));
+        (entity, speed)
+    });
+    button(world, parent, Control::MainMenu, "Main Menu", true);
+    world.entity_mut(parent).insert(MoreControls {
+        claim,
+        speed_label,
+        speeds,
+    });
+    update_more(world, parent, battle);
+}
+
+fn update_more(world: &mut World, parent: Entity, battle: &Battle) {
+    let Some(controls) = world.get::<MoreControls>(parent).copied() else {
+        return;
+    };
+    let claim_enabled = enabled(Control::ClaimInitiative, battle);
+    if world.get::<DisabledControl>(controls.claim).is_none() != claim_enabled {
+        set_enabled(world, controls.claim, claim_enabled);
+    }
+    let value = format!("AI speed: {:?}", battle.speed);
+    if let Some(mut text) = world.get_mut::<Text>(controls.speed_label)
+        && text.0 != value
+    {
+        text.0 = value;
+    }
+    for (entity, speed) in controls.speeds {
+        let border = BorderColor::all(if battle.speed == speed {
+            theme::ACCENT
+        } else {
+            theme::BORDER
+        });
+        if let Some(mut color) = world.get_mut::<BorderColor>(entity)
+            && *color != border
+        {
+            *color = border;
         }
     }
-    button(world, parent, Control::MainMenu, "Main Menu", true);
 }
 
 fn hand(world: &mut World, parent: Entity, battle: &Battle) {

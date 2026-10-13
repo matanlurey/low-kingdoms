@@ -1,6 +1,6 @@
 # Working in Low Kingdoms
 
-Low Kingdoms is a private Rust/Bevy application with a Bevy-independent headless rules engine.
+Low Kingdoms is a Rust/Bevy application with a Bevy-independent headless rules engine.
 Milestone 1A owns match rules; its authoritative specification is
 [milestone-1a.md](docs/plans/milestone-1a.md). Milestone 1B authorizes the Bevy battle interface,
 minimal RON unit content, deterministic AI, and one local active save. Read the approved
@@ -91,8 +91,15 @@ Before committing a Rust/tooling change, run `just check` and the affected targe
 Use `just fmt`, `just fmt-check`, `just clippy`, `just test`, and `just doc` to run individual gates.
 Do not use indiscriminate `--all-features` builds; production and test-support configurations are distinct.
 CI uses the same maintained command implementation rather than a second script sequence.
-Authorized GitHub Pages publishing runs only for `main` after every required CI job passes.
-It deploys the production bundle already checked by the browser suite, then tests the public URL.
+Push verification runs on `main`; pull requests and manual runs also verify. Web CI builds the
+production and test-support bundles once, then gives the same artifact to five isolated viewport
+jobs. Each runs all eleven existing cases for its project with one worker and zero retries.
+The final browser gate requires exactly all 55 cases with no missing, duplicate, skipped, flaky,
+or failed results or unexpected browser diagnostics. Authorized GitHub Pages publishing runs only
+for `main` after every required CI job passes. It deploys the exact production bundle already
+checked by those jobs, then tests the public URL. Do not rebuild it between verification and upload.
+Use `cargo xtask build-web-support` and `cargo xtask smoke-web-prebuilt --project NAME` for focused
+artifact-based checks; normal `just smoke-web` still builds and runs the full 55-case matrix.
 Read [Pages development](docs/development.md#github-pages) before changing this deployment.
 Just uses pinned Node to pass argument arrays; direct `cargo xtask dev` needs no Node runtime.
 

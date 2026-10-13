@@ -1,6 +1,7 @@
 //! Static WASM packaging and real-browser smoke orchestration.
 
 use std::fs;
+use std::io::Read;
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -54,6 +55,11 @@ pub(crate) fn build(project: &Project, output: &Path, test_support: bool) -> Res
     )?;
     fs::write(generated.join(".xtask-generated"), GENERATED_PACKAGE_MARKER)
         .map_err(|error| Failure::new(format!("Cannot mark generated WASM package: {error}")))?;
+    fs::write(
+        generated.join(".xtask-build-mode"),
+        build_mode_marker(test_support),
+    )
+    .map_err(|error| Failure::new(format!("Cannot mark WASM build mode: {error}")))?;
     let package = output.join("pkg");
     if package.exists() {
         // Earlier xtask invocations mark this directory as entirely generated.
@@ -95,6 +101,83 @@ pub(crate) fn build(project: &Project, output: &Path, test_support: bool) -> Res
 
 const GENERATED_PACKAGE_MARKER: &str =
     "Low Kingdoms xtask owns this generated wasm-bindgen directory.\n";
+
+const fn build_mode_marker(test_support: bool) -> &'static str {
+    if test_support {
+        "Low Kingdoms test-support WASM package v1.\n"
+    } else {
+        "Low Kingdoms production WASM package v1.\n"
+    }
+}
+
+fn check_prebuilt_bundle(path: &Path, test_support: bool) -> Result<()> {
+    for directory in [path.to_path_buf(), path.join("pkg")] {
+        let metadata = fs::symlink_metadata(&directory).map_err(|error| {
+            Failure::new(format!("Cannot inspect {}: {error}", directory.display()))
+        })?;
+        if !metadata.is_dir() || metadata.is_symlink() {
+            return Err(Failure::new(format!(
+                "Refusing non-directory or symlinked prebuilt bundle: {}",
+                directory.display()
+            )));
+        }
+    }
+    for filename in [
+        "index.html",
+        "bootstrap.js",
+        "style.css",
+        "THIRD_PARTY_NOTICES.md",
+        "pkg/low_kingdoms.js",
+        "pkg/low_kingdoms_bg.wasm",
+        "pkg/.xtask-generated",
+        "pkg/.xtask-build-mode",
+    ] {
+        let file = path.join(filename);
+        let metadata = fs::symlink_metadata(&file)
+            .map_err(|error| Failure::new(format!("Cannot inspect {}: {error}", file.display())))?;
+        if !metadata.is_file() || metadata.is_symlink() || metadata.len() == 0 {
+            return Err(Failure::new(format!(
+                "Prebuilt bundle requires a nonempty regular file: {}",
+                file.display()
+            )));
+        }
+    }
+    for (filename, expected) in [
+        (".xtask-generated", GENERATED_PACKAGE_MARKER),
+        (".xtask-build-mode", build_mode_marker(test_support)),
+    ] {
+        let marker = path.join("pkg").join(filename);
+        let actual = fs::read_to_string(&marker)
+            .map_err(|error| Failure::new(format!("Cannot read {}: {error}", marker.display())))?;
+        if actual != expected {
+            return Err(Failure::new(format!(
+                "Incompatible prebuilt package marker {}; rebuild this bundle with xtask",
+                marker.display()
+            )));
+        }
+    }
+    let wasm = path.join("pkg/low_kingdoms_bg.wasm");
+    let mut file = fs::File::open(&wasm)
+        .map_err(|error| Failure::new(format!("Cannot open {}: {error}", wasm.display())))?;
+    let size = file
+        .metadata()
+        .map_err(|error| Failure::new(format!("Cannot inspect {}: {error}", wasm.display())))?
+        .len();
+    let mut header = [0; 8];
+    file.read_exact(&mut header).map_err(|error| {
+        Failure::new(format!(
+            "Cannot read WASM header {}: {error}",
+            wasm.display()
+        ))
+    })?;
+    if size <= 8 || header != *b"\0asm\x01\0\0\0" {
+        return Err(Failure::new(format!(
+            "Invalid or empty prebuilt WASM module: {}",
+            wasm.display()
+        )));
+    }
+    Ok(())
+}
 
 fn check_generated_package(path: &Path) -> Result<()> {
     let metadata = match fs::symlink_metadata(path) {
@@ -155,6 +238,17 @@ pub(crate) fn smoke(project: &Project, options: &Options) -> Result<()> {
     project.require_node()?;
     build(project, &project.root.join("dist/web-test"), true)?;
     build(project, &project.root.join("dist/web"), false)?;
+    smoke_prebuilt(project, options)
+}
+
+#[expect(
+    clippy::redundant_pub_crate,
+    reason = "Host module entrypoints stay crate-local; pub conflicts with unreachable_pub."
+)]
+pub(crate) fn smoke_prebuilt(project: &Project, options: &Options) -> Result<()> {
+    project.require_node()?;
+    check_prebuilt_bundle(&project.root.join("dist/web-test"), true)?;
+    check_prebuilt_bundle(&project.root.join("dist/web"), false)?;
     let evidence = project.output(options.output.as_deref(), "evidence/web");
     create_directory(&evidence)?;
     let directory = OwnedDirectory::create(&project.root.join("dist"))?;
@@ -184,6 +278,9 @@ pub(crate) fn smoke(project: &Project, options: &Options) -> Result<()> {
         .env("LOW_KINGDOMS_SUBPATH_URL", format!("{base}low-kingdoms/"))
         .env("LOW_KINGDOMS_PRODUCTION_URL", format!("{base}production/"))
         .env("LOW_KINGDOMS_EVIDENCE_DIR", &evidence);
+    if let Some(selected) = options.project {
+        tests.args(["--project", selected.name()]);
+    }
     let mut child = process::OwnedChild::logged(&mut tests, &evidence.join("playwright.log"))?;
     child.wait(&tests, options.timeout.unwrap_or(Duration::from_mins(70)))?;
     println!(
@@ -293,6 +390,99 @@ impl Drop for OwnedDirectory {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn write_prebuilt_bundle(path: &Path, test_support: bool) {
+        fs::create_dir_all(path.join("pkg")).unwrap();
+        for filename in [
+            "index.html",
+            "bootstrap.js",
+            "style.css",
+            "THIRD_PARTY_NOTICES.md",
+            "pkg/low_kingdoms.js",
+        ] {
+            fs::write(path.join(filename), "fixture").unwrap();
+        }
+        fs::write(path.join("pkg/.xtask-generated"), GENERATED_PACKAGE_MARKER).unwrap();
+        fs::write(
+            path.join("pkg/.xtask-build-mode"),
+            build_mode_marker(test_support),
+        )
+        .unwrap();
+        fs::write(
+            path.join("pkg/low_kingdoms_bg.wasm"),
+            b"\0asm\x01\0\0\0\0\x01\0",
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn prebuilt_validation_distinguishes_production_and_test_support() {
+        let directory = OwnedDirectory::create(&std::env::temp_dir()).unwrap();
+        for support in [false, true] {
+            write_prebuilt_bundle(&directory.0, support);
+            assert!(check_prebuilt_bundle(&directory.0, support).is_ok());
+            assert!(check_prebuilt_bundle(&directory.0, !support).is_err());
+        }
+    }
+
+    #[test]
+    fn prebuilt_validation_rejects_missing_files_and_invalid_markers() {
+        let directory = OwnedDirectory::create(&std::env::temp_dir()).unwrap();
+        for missing in [
+            "index.html",
+            "bootstrap.js",
+            "style.css",
+            "THIRD_PARTY_NOTICES.md",
+            "pkg/low_kingdoms.js",
+            "pkg/low_kingdoms_bg.wasm",
+            "pkg/.xtask-generated",
+            "pkg/.xtask-build-mode",
+        ] {
+            write_prebuilt_bundle(&directory.0, false);
+            fs::remove_file(directory.0.join(missing)).unwrap();
+            assert!(
+                check_prebuilt_bundle(&directory.0, false).is_err(),
+                "{missing}"
+            );
+        }
+        for marker in ["pkg/.xtask-generated", "pkg/.xtask-build-mode"] {
+            write_prebuilt_bundle(&directory.0, false);
+            fs::write(directory.0.join(marker), "unrelated").unwrap();
+            assert!(check_prebuilt_bundle(&directory.0, false).is_err());
+        }
+    }
+
+    #[test]
+    fn prebuilt_validation_rejects_empty_truncated_and_wrong_version_wasm() {
+        let directory = OwnedDirectory::create(&std::env::temp_dir()).unwrap();
+        write_prebuilt_bundle(&directory.0, false);
+        for invalid in [
+            b"".as_slice(),
+            b"\0asm".as_slice(),
+            b"\0asm\x01\0\0\0".as_slice(),
+            b"\0asm\x02\0\0\0\0\x01\0".as_slice(),
+            b"unrelated content".as_slice(),
+        ] {
+            fs::write(directory.0.join("pkg/low_kingdoms_bg.wasm"), invalid).unwrap();
+            assert!(check_prebuilt_bundle(&directory.0, false).is_err());
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn prebuilt_validation_rejects_symlinked_input() {
+        let directory = OwnedDirectory::create(&std::env::temp_dir()).unwrap();
+        let bundle = directory.0.join("bundle");
+        write_prebuilt_bundle(&bundle, false);
+        let linked = directory.0.join("linked");
+        std::os::unix::fs::symlink(&bundle, &linked).unwrap();
+        assert!(check_prebuilt_bundle(&linked, false).is_err());
+        let marker = bundle.join("pkg/.xtask-build-mode");
+        let marker_target = directory.0.join("mode");
+        fs::rename(&marker, &marker_target).unwrap();
+        std::os::unix::fs::symlink(&marker_target, &marker).unwrap();
+        assert!(check_prebuilt_bundle(&bundle, false).is_err());
+    }
 
     #[test]
     fn package_replacement_refuses_unmarked_user_files() {

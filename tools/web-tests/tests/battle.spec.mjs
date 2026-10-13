@@ -1,5 +1,10 @@
 import fs from "node:fs/promises";
 import { expect, test } from "@playwright/test";
+import {
+  createBackgroundTab,
+  holdTouchThroughPrivateRevision,
+  waitForTabActivity,
+} from "../driver.mjs";
 
 // These tests observe the live, read-only player projection. Every match change
 // is made through the same rendered controls a human uses, never a test command.
@@ -513,17 +518,10 @@ async function playUnit(page, command, touch) {
 
 async function playAndPauseAi(page, command, touch) {
   await setSpeed(page, "normal", touch);
-  const background = await page.context().newPage();
   // Playwright normally forces every page to appear focused and active.
   // Disable that driver override so real browser tab focus/visibility governs
   // the production pause policy. No document or game state is substituted.
-  for (const tab of [page, background]) {
-    const session = await page.context().newCDPSession(tab);
-    await session.send("Emulation.setFocusEmulationEnabled", {
-      enabled: false,
-    });
-    await session.detach();
-  }
+  const background = await createBackgroundTab(page);
   await page.bringToFront();
   const revision = (await bridge(page)).battle.revision;
   await playUnit(page, command, touch);
@@ -717,6 +715,15 @@ for (const [route, url] of routes) {
     const touch = Boolean(testInfo.project.use.hasTouch);
     await page.goto(url);
     await waitForScreen(page, "title");
+    const heldMenuRegression =
+      route === "subpath" && testInfo.project.name === "phone-minimum";
+    const background = heldMenuRegression
+      ? await createBackgroundTab(page)
+      : null;
+    if (background) {
+      await page.bringToFront();
+      await waitForTabActivity(page, true);
+    }
     await activate(page, "play", touch, true);
     await waitForScreen(page, "mulligan");
     expect((await bridge(page)).battle.view.hand).toHaveLength(6);
@@ -746,15 +753,26 @@ for (const [route, url] of routes) {
         .poll(async () => (await bridge(page)).viewport.width)
         .toBe(original.width);
     }
-    await activate(page, "mulligan", touch);
+    await activate(page, "mulligan", touch, heldMenuRegression);
     await waitForScreen(page, "battle");
     await expect
       .poll(async () => (await bridge(page)).battle.view.phase)
       .toBe("InitialResourcing");
+    if (background) {
+      // Freeze the real page before screenshots/reload consume the Normal AI
+      // delay. The saved match still awaits the opponent's private resource choice.
+      await background.bringToFront();
+      await waitForTabActivity(page, false);
+      expect((await bridge(page)).battle.revision).toBe(2);
+    }
     await assertLayout(page);
     await capture(page, testInfo, `${route}-initial-resourcing`);
     const hand = (await bridge(page)).battle.view.hand;
     await page.reload();
+    if (background) {
+      await page.bringToFront();
+      await waitForTabActivity(page, true);
+    }
     await waitForScreen(page, "title");
     await activate(page, "play", touch);
     await waitForPanel(page, "Replace");
@@ -764,9 +782,32 @@ for (const [route, url] of routes) {
     await activate(page, "resume", touch);
     await waitForScreen(page, "battle");
     expect((await bridge(page)).battle.view.hand).toEqual(hand);
-    await activate(page, "more", touch);
-    await activate(page, "main-menu", touch);
+    await activate(page, "more", touch, heldMenuRegression);
+    if (background) {
+      await waitForPanel(page, "More");
+      await expect
+        .poll(async () => {
+          const menu = controlFor(await bridge(page), "main-menu");
+          return visible(menu, page.viewportSize()) && menu.enabled !== false;
+        })
+        .toBe(true);
+      const held = await holdTouchThroughPrivateRevision(
+        page,
+        await bridge(page),
+        () => bridge(page),
+      );
+      await testInfo.attach("held-menu-private-ai", {
+        body: JSON.stringify(held),
+        contentType: "application/json",
+      });
+    } else {
+      await activate(page, "main-menu", touch);
+    }
     await waitForScreen(page, "title");
+    if (background) {
+      await capture(page, testInfo, "held-menu-returned-title");
+      await background.close();
+    }
     await activate(page, "play", touch);
     await waitForPanel(page, "Replace");
     await activate(page, "confirm-replace", touch);

@@ -2,6 +2,7 @@ name: Verify scaffold
 
 on:
   push:
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
@@ -54,6 +55,7 @@ jobs:
           shared-key: native-ubuntu-24.04
           key: production-test-support
       - run: npm ci --prefix tools/web-tests
+      - run: npm run --prefix tools/web-tests test-reports
       - run: cargo xtask check
 
   wasm:
@@ -66,7 +68,60 @@ jobs:
           key: wasm32-production-test-support
       - run: cargo xtask check-web
 
-  browser:
+  web-build:
+    name: Build web bundles
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: tools/web-tests/package.json
+          cache: npm
+          cache-dependency-path: tools/web-tests/package-lock.json
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          key: wasm32-production-test-support
+      - name: Cache pinned project CLIs
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            .tools/just-*/bin
+            .tools/wasm-bindgen-*/bin
+          key: project-clis-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml', 'tools/tool-versions.toml', 'Cargo.lock') }}
+      - run: cargo xtask setup
+      - run: cargo xtask build-web-support
+      - run: cargo xtask build-web
+      - name: Discover every required browser case from this commit
+        run: node tools/web-tests/node_modules/@playwright/test/cli.js test --config tools/web-tests/playwright.config.mjs --list --reporter=json > dist/browser-inventory.json
+        env:
+          LOW_KINGDOMS_BASE_URL: http://127.0.0.1:4173/
+          LOW_KINGDOMS_SUBPATH_URL: http://127.0.0.1:4173/low-kingdoms/
+          LOW_KINGDOMS_PRODUCTION_URL: http://127.0.0.1:4173/production/
+      - name: Share the exact production and support bundles
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: web-bundles
+          path: |
+            dist/web/
+            dist/web-test/
+            dist/browser-inventory.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 2
+
+  browser-viewport:
+    name: Browser (${{ matrix.project }})
+    needs: web-build
+    strategy:
+      fail-fast: false
+      matrix:
+        project:
+          - desktop-720
+          - desktop-800
+          - phone-portrait
+          - phone-minimum
+          - phone-landscape-dpr2
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
@@ -78,12 +133,54 @@ jobs:
           cache-dependency-path: tools/web-tests/package-lock.json
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          key: wasm32-production-test-support
-      - run: cargo xtask setup
-      - run: npm exec --prefix tools/web-tests -- playwright install-deps chromium
-      - run: cargo xtask smoke-web --timeout 4200
-      - name: Upload verified production site
-        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+          shared-key: browser-host
+      - name: Download the shared bundles without rebuilding
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: web-bundles
+          path: dist
+      - run: npm ci --prefix tools/web-tests
+      - run: npm exec --prefix tools/web-tests -- playwright install --with-deps chromium
+      - name: Run the maintained viewport suite with one Chromium worker
+        run: cargo xtask smoke-web-prebuilt --project '${{ matrix.project }}' --timeout 4200
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: browser-evidence-${{ matrix.project }}
+          path: evidence/web/
+          if-no-files-found: warn
+          retention-days: 2
+
+  browser:
+    name: browser
+    if: ${{ !cancelled() }}
+    needs: [web-build, browser-viewport]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: tools/web-tests/package.json
+      - name: Download the original bundles and required-case inventory
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: web-bundles
+          path: dist
+      - name: Collect every viewport report and its evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: browser-evidence-*
+          path: evidence/sharded
+      - name: Require all 55 cases, one attempt each, and empty error collections
+        run: node tools/web-tests/verify-reports.mjs dist/browser-inventory.json evidence/sharded evidence/web-summary.json
+      - name: Require every build and viewport job to succeed
+        if: needs.web-build.result != 'success' || needs.browser-viewport.result != 'success'
+        run: |
+          echo "The shared build and all five viewport jobs must succeed."
+          exit 1
+      - name: Upload the tested production bundle for Pages
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && needs.web-build.result == 'success' && needs.browser-viewport.result == 'success'
         uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4
         with:
           path: dist/web
@@ -91,7 +188,9 @@ jobs:
         if: always()
         with:
           name: browser-evidence
-          path: evidence/web/
+          path: |
+            evidence/sharded/
+            evidence/web-summary.json
           if-no-files-found: warn
           retention-days: 14
 
