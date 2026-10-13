@@ -1,19 +1,16 @@
 # Low Kingdoms
 
-A code-first Rust/Bevy application with a title/About screen and a deterministic headless rules
-engine. The application UI is rendered by Bevy on native desktop and in the browser; the web
-page supplies a canvas, loading status, and startup-error reporting. The client has no battle UI yet.
-
-The title offers **About**, plus **Quit** on native desktop. About includes the application version
-and **Back**. Mouse, touch, Tab/Shift+Tab, Enter/Space, and Escape are the intended controls. Escape
-returns from About and does not exit the title screen.
+A Rust/Bevy card battle prototype for native desktop and WebAssembly. Milestone 1B connects the
+deterministic, renderer-independent rules engine to a responsive human-versus-AI battle. Bevy
+renders every game screen; the browser page supplies only the canvas, loading status, and startup
+error reporting.
 
 ## Start
 
 Install Rust through rustup, Just, and the pinned Node/npm versions listed in
 [development](docs/development.md). The repository pins Rust **1.98.0** and Bevy **0.19.1**.
-Run commands from the repository root. A usable native display and graphics adapter are required
-for the native application; browser rendering requires WebGL2.
+Run commands from the repository root. Native play requires a usable display and graphics adapter;
+browser play requires WebGL2.
 
 ```sh
 just doctor
@@ -21,70 +18,89 @@ just setup
 just dev
 ```
 
-Just recipes use the pinned Node release to invoke the Rust tool with argument arrays. For a
-native-only path without Node, use `cargo xtask dev` directly; the native application itself has
-no Node dependency.
-
 For the browser:
 
 ```sh
 just dev-web
 ```
 
-Open the localhost URL printed by that command. It rebuilds on invocation; it does not provide hot
-reload. Serve browser output over HTTP, not by opening `index.html` as a local file.
+Open the localhost URL printed by that command. It rebuilds on invocation and requires HTTP;
+opening `index.html` as a local file is unsupported. Native-only development can use
+`cargo xtask dev` without Node. Just and browser development use the pinned Node release.
+
+## Play
+
+Select **Play**, inspect the six opening cards, then choose **Keep Hand** or **Mulligan**. Select up
+to two cards as starting resources and confirm. The opponent makes its setup decisions privately.
+You play as player zero; opening initiative is seeded and may belong to either player.
+
+Click or tap a hand card to inspect it, then choose **Play** when available. Select a ready friendly
+unit, choose **Attack**, and select a highlighted enemy unit or stronghold. Units enter exhausted,
+damage persists, and exhausted defenders still retaliate. Enemy units do not automatically protect
+their stronghold. Close the preview, tap empty space, or press Escape to cancel selection.
+
+**Pass** remains accessible during actions. **Claim Initiative** is in the secondary menu and ends
+your actions for that round. Starting in round two, draw two cards, optionally resource one, then
+ready units and resources. Inspect your resources through their counter and review public events
+in the log. The opponent uses deterministic heuristics; Normal, Fast, and Instant change its action
+delay to 750 ms, 150 ms, and zero respectively. Inactive windows/tabs pause AI scheduling.
+
+Desktop uses opposing fields and an adaptive grid. Compact layouts use scrollable unit rows, a
+collapsible hand tray, and dismissible panels. Mouse wheel/scroll and touch swipes reveal offscreen
+cards without canceling an attacker. The supported browser minimum is **375 × 667 CSS pixels**.
+Tab/Shift+Tab and Enter/Space retain keyboard navigation; Escape returns from About to the title.
+
+Unfinished battles save automatically to one local slot. **Resume Battle** continues a compatible
+save; starting a replacement requires confirmation. Results show Victory, Defeat, or Draw and
+clear the resumable slot. **Play Again** generates a fresh seed. Storage is local to the native
+user or browser origin, with no account or cloud service. See
+[save locations and compatibility](docs/development.md#local-saves).
+
+## Build and verify
 
 ```sh
-just build       # dist/native/
-just build-web   # dist/web/, production static files
+just build         # dist/native/
+just build-web     # dist/web/, production static files
+just check         # formatting, structure, strict host lints, tests, and docs
+just check-web     # application, battle, and rules WASM compile/lint checks
+just smoke-native  # actual native renderer and screenshot evidence
+just smoke-web     # actual WASM, browser gameplay, input, and screenshots
+just check-all     # all mandatory gates
 ```
 
-The web distribution uses relative paths and can be hosted at a root URL or a subpath. It has no
-runtime Node requirement, CDN dependency, server application, or account system. Commands build
-locally; they do not deploy or publish anything.
+Headless tests establish behavior; rendered captures require visual inspection. Missing graphics
+or browser prerequisites block their checks. Actual results and remaining requirements are recorded
+in [Milestone 1B acceptance](docs/plans/milestone-1b-acceptance.md), with the approved
+[specification](docs/plans/milestone-1b.md) and [testing guide](docs/testing.md).
 
-CI publishes the verified production WASM bundle to GitHub Pages after a merge/push to `main`
-passes every required check. Pull requests do not deploy. Open the browser build at
-[matanlurey.github.io/low-kingdoms](https://matanlurey.github.io/low-kingdoms/).
-Pages uses GitHub Actions as its publishing source. CI checks the published application with real
-Chromium after deployment. See [Pages deployment](docs/development.md#github-pages).
-
-## Verify
-
-```sh
-just check          # formatting, structure, strict host lints, headless tests, and docs
-just check-web      # application and rules WASM compile and lints
-just smoke-native   # actual native window and screenshot evidence
-just smoke-web      # actual generated WASM bundle and browser input/screenshots
-just check-all      # all of the above
-```
-
-These checks establish different things. Headless tests cover screen navigation and entity
-lifecycle plus complete rules-engine matches; renderer captures need visual inspection. A missing
-graphics adapter or browser fails or blocks rendering verification rather than passing as a skip. Generated evidence is under
-`evidence/` and is ignored by Git. See [testing](docs/testing.md) and the
-[acceptance plan](docs/plans/scaffold.md) for the checks actually completed and environment limits.
-Rules-only iteration uses `cargo test --locked -p low-kingdoms-rules`; see the
-[approved specification](docs/plans/milestone-1a.md) and
-[Milestone 1A acceptance](docs/plans/milestone-1a-acceptance.md).
+The web distribution uses relative paths for root or subpath hosting. It has no runtime Node,
+CDN, server application, or account dependency. CI publishes the verified production bundle to
+[matanlurey.github.io/low-kingdoms](https://matanlurey.github.io/low-kingdoms/) only after all required
+checks pass on `main`; pull requests do not deploy. The public site reflects deployed `main`,
+not an unmerged implementation branch. See [Pages deployment](docs/development.md#github-pages).
 
 ## Workspace
 
-| Package                                 | Role                                                                |
-| --------------------------------------- | ------------------------------------------------------------------- |
-| `low-kingdoms` (`apps/game`)            | Thin native/WASM executable entry point.                            |
-| `low-kingdoms-client` (`crates/client`) | Bevy application, screen lifecycle, and presentation.               |
-| `low-kingdoms-rules` (`crates/rules`)   | Bevy-independent two-player commands, views, snapshots, and replay. |
-| `xtask` (`tools/xtask`)                 | Host-only development/build/test orchestration.                     |
+| Package                                 | Role                                                                       |
+| --------------------------------------- | -------------------------------------------------------------------------- |
+| `low-kingdoms` (`apps/game`)            | Thin native/WASM executable entry point.                                   |
+| `low-kingdoms-client` (`crates/client`) | Bevy screens, input, scheduling, responsive UI, and platform storage.      |
+| `low-kingdoms-battle` (`crates/battle`) | Validated RON content, view-only deterministic AI, and resumable sessions. |
+| `low-kingdoms-rules` (`crates/rules`)   | Authoritative two-player commands, views, snapshots, and replay.           |
+| `xtask` (`tools/xtask`)                 | Host-only development/build/test orchestration.                            |
 
-All packages are unpublished. [Architecture](docs/architecture.md) explains dependency direction;
-[STYLE_GUIDE.md](STYLE_GUIDE.md) records the Rust conventions. [AGENTS.md](AGENTS.md) is the
-operational map for coding agents, with three substantive repository-local skills under `.agents/`.
+All packages are unpublished. [Architecture](docs/architecture.md) describes ownership and
+[STYLE_GUIDE.md](STYLE_GUIDE.md) records conventions. [AGENTS.md](AGENTS.md) maps coding-agent
+instructions and repository-local skills. Rules-only iteration uses
+`cargo test --locked -p low-kingdoms-rules`; its unchanged gameplay specification and prior evidence
+are in [Milestone 1A](docs/plans/milestone-1a.md) and
+[its acceptance record](docs/plans/milestone-1a-acceptance.md).
 
-Linux, macOS, and Windows are intended desktop targets. CI configuration and target compilation
-are distinct from an interactive runtime test on each operating system. Native mobile, console
-packaging, Steam integration, editor workflows, and gameplay presentation are deferred. A phone-shaped
-browser viewport does not establish Safari/iOS hardware support or Steam Deck certification.
+Milestone 1B uses six vanilla unit definitions and two fixed twenty-card decks. Artwork, abilities,
+commanders, action/upgrade cards, factions, deck building, advanced AI, networking, campaigns, and
+cloud saves are deferred. Native mobile, Safari/iOS hardware, and physical handheld performance
+are not established by Chromium viewport emulation. CI native builds and actual runtime checks are
+reported separately for Linux, macOS, and Windows.
 
-Third-party attribution is in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). No license for
-original Low Kingdoms work is asserted by this scaffold.
+[Third-party notices](THIRD_PARTY_NOTICES.md) accompany distributions. No license for original
+Low Kingdoms work is asserted by this repository.

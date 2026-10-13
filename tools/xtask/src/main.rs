@@ -448,6 +448,8 @@ fn check_web(project: &Project) -> Result<()> {
                 "low-kingdoms-client",
                 "-p",
                 "low-kingdoms-rules",
+                "-p",
+                "low-kingdoms-battle",
             ]);
             if let Some(features) = features {
                 command.args(["--features", features]);
@@ -490,38 +492,67 @@ fn smoke_native(project: &Project, options: &Options) -> Result<()> {
     ]))?;
     let output = project.output(options.output.as_deref(), "evidence/native");
     create_directory(&output)?;
-    let screenshot = output.join("title.png");
-    if screenshot.exists() {
-        fs::remove_file(&screenshot)
-            .map_err(|error| Failure::new(format!("Cannot remove prior screenshot: {error}")))?;
-    }
     let binary = project
         .target_dir()?
         .join("debug")
         .join(format!("low-kingdoms{}", std::env::consts::EXE_SUFFIX));
+    for scene in ["title", "mulligan", "battle", "results"] {
+        capture_native_scene(project, options, &binary, &output, scene)?;
+    }
+    println!(
+        "Native title, mulligan, deployed battlefield, and results captures completed in {}. Inspect each image for readable text, controls, and clipping; capture completion alone is not visual approval.",
+        output.display()
+    );
+    Ok(())
+}
+
+fn capture_native_scene(
+    project: &Project,
+    options: &Options,
+    binary: &Path,
+    output: &Path,
+    scene: &str,
+) -> Result<()> {
+    let screenshot = output.join(format!("{scene}.png"));
+    if screenshot.exists() {
+        fs::remove_file(&screenshot)
+            .map_err(|error| Failure::new(format!("Cannot remove prior screenshot: {error}")))?;
+    }
+    // Test-support alone honors this override. Every scene owns a fresh active slot,
+    // so smoke runs cannot read or replace a developer's normal resumable battle.
+    let data_directory = output.join("save-fixtures").join(scene);
+    if data_directory.exists() {
+        fs::remove_dir_all(&data_directory).map_err(|error| {
+            Failure::new(format!("Cannot clear prior native fixture slot: {error}"))
+        })?;
+    }
+    create_directory(&data_directory)?;
+    let log = output.join(format!("{scene}.log"));
     let mut command = Command::new(binary);
     command
         .current_dir(&project.root)
         .env("BEVY_ASSET_ROOT", &project.root)
+        .env("LOW_KINGDOMS_TEST_DATA_DIR", &data_directory)
         .arg("--screenshot")
-        .arg(&screenshot);
-    let mut child = process::OwnedChild::logged(&mut command, &output.join("run.log"))?;
+        .arg(&screenshot)
+        .arg("--scene")
+        .arg(scene);
+    let mut child = process::OwnedChild::logged(&mut command, &log)?;
     child.wait(&command, options.timeout.unwrap_or(Duration::from_secs(60)))?;
     let bytes = fs::read(&screenshot).map_err(|error| {
         Failure::new(format!(
-            "Renderer exited without capture {}: {error}; inspect run.log",
-            screenshot.display()
+            "Renderer exited without capture {}: {error}; inspect {}",
+            screenshot.display(),
+            log.display()
         ))
     })?;
     if bytes.len() < 1024 || !bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
-        return Err(Failure::new(
-            "Native renderer capture is missing or invalid; inspect run.log",
-        ));
+        return Err(Failure::new(format!(
+            "Native renderer capture is missing or invalid; inspect {}",
+            log.display()
+        )));
     }
-    println!(
-        "Native capture completed: {}. Inspect the image for readable title/controls and clipping; capture completion alone is not visual approval.",
-        screenshot.display()
-    );
+    println!("Native {scene} capture completed: {}", screenshot.display());
     Ok(())
 }
 

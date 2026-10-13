@@ -67,6 +67,14 @@ export default defineConfig({
       },
     },
     {
+      name: "phone-minimum",
+      use: {
+        viewport: { width: 375, height: 667 },
+        hasTouch: true,
+        isMobile: true,
+      },
+    },
+    {
       name: "phone-landscape-dpr2",
       use: {
         viewport: { width: 844, height: 390 },

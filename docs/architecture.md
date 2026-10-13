@@ -1,33 +1,36 @@
 # Architecture
 
-The workspace has four implemented packages. `apps/game` depends on `crates/client`; the client
-depends on Bevy and narrowly required browser bindings. `crates/rules` is an independent Serde/JSON
-library. `tools/xtask` orchestrates host processes and does not depend on the client or renderer.
-Browser tests live outside the Rust package graph.
+The workspace has five packages. `apps/game` depends on `crates/client`; the client depends on
+Bevy, `crates/battle`, `crates/rules`, and narrowly required platform bindings. Battle depends on
+rules, RON, Serde, and JSON. Neither battle nor rules has a direct or indirect Bevy dependency.
+`tools/xtask` orchestrates host processes and does not depend on the client or renderer. Browser
+tests live outside the Rust package graph.
 
-| Location                      | Owned behavior                                                         |
-| ----------------------------- | ---------------------------------------------------------------------- |
-| `apps/game/src/main.rs`       | Calls the client's module-qualified bootstrap API.                     |
-| `crates/client/src/app.rs`    | Application composition and renderer/window setup.                     |
-| `crates/client/src/screens/`  | Title/About state, entry construction, and state-scoped cleanup.       |
-| `crates/client/src/ui/`       | Shared style, input/focus, and navigation activation.                  |
-| `crates/client/src/platform/` | Native/browser launch edges and capability differences.                |
-| `crates/rules/`               | Complete authoritative two-player rules, safe views, snapshots/replay. |
-| `tools/xtask/`                | Root/path resolution, subprocesses, packaging, checks, and evidence.   |
-| `tools/web-tests/`            | Real browser input and inspection of generated WASM distributions.     |
-| `web/`                        | Canvas host and WASM startup/error loader.                             |
+| Location                      | Owned behavior                                                               |
+| ----------------------------- | ---------------------------------------------------------------------------- |
+| `apps/game/src/main.rs`       | Calls the client's module-qualified bootstrap API.                           |
+| `crates/client/src/app.rs`    | Application composition and renderer/window setup.                           |
+| `crates/client/src/screens/`  | Title, About, Mulligan, Battle, Results, and state-scoped cleanup.           |
+| `crates/client/src/ui/`       | Shared style, input/focus, and navigation activation.                        |
+| `crates/client/src/platform/` | Native/browser launch, activity, entropy, and local storage edges.           |
+| `crates/client/src/gameplay/` | Session ownership, command dispatch, scheduling, and presentation.           |
+| `crates/battle/`              | Embedded content, deterministic AI, and authoritative session/save boundary. |
+| `crates/rules/`               | Complete authoritative two-player rules, safe views, snapshots/replay.       |
+| `tools/xtask/`                | Root/path resolution, subprocesses, packaging, checks, and evidence.         |
+| `tools/web-tests/`            | Real browser input and inspection of generated WASM distributions.           |
+| `web/`                        | Canvas host and WASM startup/error loader.                                   |
 
 ## Application composition and ownership
 
 The executable delegates to `low_kingdoms_client::app::run()`. Client composition installs the
-screen and shared UI interaction plugins. Native and WASM use these same plugins and screen
+screen, gameplay, and shared UI interaction plugins. Native and WASM use these same plugins and screen
 construction functions. Renderer/window setup is separable so headless tests can compose the
 actual application behavior without initializing a GPU.
 
-The persistent application camera is created once. Bevy application state owns the title and About
-screens. Each screen has one root with `DespawnOnExit`; descendant ownership removes its controls
-and text on exit. Repeated About/Back transitions must not accumulate roots, cameras, handlers, or
-observers. Meaningful `Name` values and small marker components give tests entity identity without
+The persistent application camera is created once. Bevy application state owns Title, About,
+Mulligan, Battle, and Results screens. Each screen has one root with `DespawnOnExit`; descendant ownership removes its controls
+and text on exit. Repeated navigation, match restarts, and save restoration must not accumulate roots, cameras,
+handlers, or observers. Meaningful `Name` values and small marker components give tests entity identity without
 making internal presentation entities public application APIs.
 
 Input activation reaches the production navigation path. Screen state is authoritative in Bevy.
@@ -44,12 +47,15 @@ readiness to the loader. Escape from About returns to the title on both platform
 Browser output uses WebGL2 with no WebGPU or threaded WASM requirement. HTML/CSS owns the canvas
 parent's available size, while Bevy renders the product UI. Relative runtime URLs allow the same
 static output at a root URL or a subpath. There is no runtime Node service, CDN, service worker,
-network protocol, or gameplay state in JavaScript.
+network protocol, or independently modeled gameplay state in JavaScript. Browser storage holds
+opaque privileged save text; all parsing, validation, and decisions stay in Rust.
 
 The normal `low-kingdoms-ready` event dismisses the loading overlay after live UI readiness. It is
 not proof of pixel correctness. The non-default `test-support` feature supplies native screenshot
 support and a read-only browser bridge named `window.__LOW_KINGDOMS_TEST__`. It derives observations
-from the live world and permits no state mutation. Production packaging excludes that bridge.
+from the live world and permits no state mutation. Gameplay observations contain only the human
+view, permitted legal actions, and presentation data. They exclude seeds, raw snapshots, replay
+logs, AI private hands/resources, and deck order. Production packaging excludes that bridge.
 
 ## Tooling and distributions
 
@@ -74,8 +80,8 @@ It does not become part of the shipped static application.
 
 `crates/rules` is the `low-kingdoms-rules` library. It owns complete two-player matches without
 Bevy, the client, host tools, operating-system entropy, time, or global mutable state. Its only
-dependencies are the already locked Serde and JSON packages. The client does not depend on it yet;
-Milestone 1B will add that edge. Rendering entities must never become rules identifiers.
+dependencies are Serde and JSON. The client and battle library consume this API; neither changes
+its ownership. Rendering entities must never become rules identifiers.
 
 The module-qualified public API is:
 
@@ -127,7 +133,8 @@ emit phase/round/readiness/next-actor events in their execution order.
 Authoritative snapshots are privileged version-1 JSON, containing the canonical catalog, initial
 configuration, all zones, PRNG/allocation state, and pending decisions. Restore compares exact
 catalog contents, avoiding fingerprint collisions, and validates phase/outcome/card conservation
-and ownership/statistic invariants before accepting commands. No storage or migration layer exists.
+and ownership/statistic invariants before accepting commands. The rules library contains no
+storage or migration layer; Milestone 1B adds local storage outside it.
 Replay reconstructs initialization plus a caller's ordered command log; events need not rebuild
 the authoritative current state. Configuration/catalog order is normalized where appropriate;
 player deck input order remains an explicit initialization input.
@@ -136,3 +143,98 @@ Cost/Power/Health use `u32`; accumulated damage uses `u64` so lethal overkill ca
 Round numbers and card IDs use checked `u64` counters. A round-ending command rejects representational
 overflow before mutation; this is an arithmetic guard, not a gameplay round limit. Snapshot restore
 rejects damage or statistics that could invalidate these arithmetic guarantees.
+
+## Prototype battle boundary (Milestone 1B)
+
+`crates/battle` is the `low-kingdoms-battle` library. It introduces the minimum content, AI, and
+session boundary needed to play the approved 1A rules without rendering dependencies.
+
+| Module    | Public API and responsibility                                                                                                                                 |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `content` | `Content::load`/`parse`, `cards`, `config`, `signature`, and `CardDefinition::unit_definition`; validated embedded RON and exact compatibility identity.      |
+| `ai`      | `choose(view, legal, catalog)`; a legal, deterministic command using only that player's permitted information.                                                |
+| `session` | `Session::new`/`restore`, `view`, `legal_commands`, `needs_ai`, `apply_human`, `step_ai`, `history`, `revision`, `is_finished`, and privileged `save`/`seed`. |
+
+Content embeds six vanilla named units and exactly two twenty-card decks. Definition IDs are
+canonicalized; deck order remains a meaningful engine input. The signature is exact canonical
+JSON of names, statistics, deck references/order, and stronghold configuration, rather than a
+potentially colliding hash. Names are presentation data; printed statistics go unchanged to the
+rules engine. RON is parsed once during client initialization, not on each action or frame.
+
+The AI receives its own `PlayerView`, the engine's legal commands, and public definitions. It never
+receives `Game`, an authoritative snapshot, the human view, or deck lists. Explicit priorities
+favor winning attacks, favorable trades, useful deployments, stronghold attacks, then claiming
+initiative or passing when no worthwhile action remains. Setup preserves useful inexpensive
+units and resources expensive or redundant cards. Stable command/instance-ID tie-breaking is
+independent of legal-list enumeration order. The profile is stateless; timing does not affect
+strategy, and no random source, search tree, network call, or generic effect interpreter is involved.
+
+`Session` keeps `Game` private and fixes human player zero/opponent player one. Public presentation
+methods expose only the human's permitted view, legal commands, and filtered events. Each accepted
+command increments a revision, including buffered setup decisions that emit no public events.
+Validation failures preserve game state, revision, history, and log. AI selection or engine errors
+are returned directly; an unrelated fallback action never hides a defect.
+
+## Client command and synchronization lifecycle
+
+A control constructs a typed engine command from permitted card IDs and the current legal list.
+The session validates and applies it, returns human-filtered events, and supplies a fresh human
+view. Events drive notifications and chronological history; the view supplies displayed zones,
+readiness, damage, strongholds, resource counters, and phase. UI code does not calculate combat,
+resource payment, eligibility, pass sequences, or initiative transitions.
+
+The presentation model owns only transient selection/target mode, scroll positions, panels,
+notifications, and speed preference. Changed views reconcile affected card entities and text.
+Starting/restoring a match performs a full reconciliation; inconsistency recovery may also do so.
+Ordinary damage/readiness updates preserve row scroll and attacker selection. Screen-owned roots
+clean up on transitions; the persistent camera and gameplay composition stay singular.
+
+Desktop uses opposing fields with an adaptive grid and log sidebar. Compact viewports use
+horizontal unit rows, a collapsible hand tray, and dismissible previews/log/resource panels.
+Pass remains outside scroll areas; Claim Initiative is a secondary action. Input distinguishes
+inspection from contextual Play/Attack and suppresses activation while scrolling. Legal commands
+are the source for disabled actions and highlighted targets. Automatic layout uses logical
+viewport dimensions with a 375×667 CSS-pixel minimum, safe-area handling, and no manual scale knob.
+
+AI scheduling executes at most one action at a time, allowing presentation to update before the
+next action. Normal waits 750 ms, Fast 150 ms, and Instant adds no intentional delay. Inactive
+browser documents/native windows pause scheduling without a backlog; activation starts a fresh
+schedule. UI timing, selection, and open panels do not enter rules state.
+
+Unexpected command/AI/presentation failures stop the affected path, preserve the last valid session,
+and offer recovery. A save failure after a successful command retries persistence of that current
+session; it must not replay the command. Technical diagnostics describe the operation without
+printing snapshots, logs, or hidden cards.
+
+## Local save and replay boundary
+
+The platform `Store` abstraction reads, replaces, or clears one opaque active slot. Browser
+storage uses `localStorage`; native storage uses an absolute per-user application data directory
+and a sibling temporary file followed by replacement. Fresh match seeds come from browser Crypto
+or native operating-system entropy at this edge. Rules and battle remain explicit-seed deterministic
+libraries. Play Again obtains a fresh seed rather than reusing the previous match.
+
+The session save envelope is version 1 and contains exact content identity, fixed roles, AI profile
+version/state, privileged seed, revision, current phase, full version-1 engine snapshot, ordered
+successful command log, and human-filtered event history. The AI state is explicitly stateless.
+Timers/queued actions and transient selection are excluded; after restore, `needs_ai` derives
+eligibility from the authoritative pending state, so already completed decisions do not repeat.
+The client may wrap session text with versioned presentation preferences such as AI speed.
+
+Restore validates compatibility and the engine snapshot, replays the ordered commands, checks AI
+commands against the saved profile, then compares exact resulting snapshot, revision, phase, and
+filtered history. There is no format/content migration. The presentation history retains the last
+256 events; the full command log remains intact for replay. Saves are limited to 2 MiB and 4096
+successful commands as protective implementation bounds, with atomic rejection before advancing
+beyond the command bound. These are not new gameplay rules.
+
+Snapshots/logs contain hidden information and remain privileged local persistence data. They are
+never a UI/test-bridge projection or diagnostic dump. This prototype does not protect local files
+from their owner and does not define a networking/authentication protocol.
+
+Compatible unfinished saves enable Resume Battle. Replacement requires confirmation; returning to
+Main Menu preserves an unfinished slot. Finished saves can validate and restore internally for
+cleanup, but are never resumable. Completion clears the active slot; cleanup failure is surfaced
+and may preserve a finished record that cannot reopen gameplay. Missing, corrupt, incompatible,
+unavailable, and quota-limited storage have explicit recovery paths. No database, cloud service,
+save-slot browser, or account system is introduced.
